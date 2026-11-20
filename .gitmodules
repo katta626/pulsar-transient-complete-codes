@@ -1,3 +1,6 @@
 [submodule "psr-searchmode-to-filterbank"]
 	path = psr-searchmode-to-filterbank
 	url = https://github.com/katta626/psr-searchmode-to-filterbank
+[submodule "Intro-to-Interferometry"]
+	path = Intro-to-Interferometry
+	url = https://github.com/katta626/Intro-to-Interferometry
