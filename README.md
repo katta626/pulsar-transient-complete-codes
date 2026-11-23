@@ -9,3 +9,11 @@ The reository acts in two way;
 
      1. two-element interferometry which it has been used and currently using for the study of solar and            gaalctic transits along with the dailyobservations of solar flares (detection of solar flares was not done by me.)
      2. Diamond Array Telescope, currently writing the transient detection pipeline which consist of the whole data proccesing from start of ADC data products to classifications of the same; parralell proccessing for ADC to filterbank by modifying the old codes, and gpu and/or search algorithms for transients along with rfi mitigation. (The codes order may look messy but it will be better as the time goes hopefully by the time we it a real time transient detection system.)
+
+## Repository layout
+
+| Folder | Contents |
+|---|---|
+| `filterbank/` | Complete codes for pulsar and transient searches (formerly `psr-searchmode-to-filterbank`); the PSRFITS → filterbank converter now lives in `filterbank/converter/` |
+| `PULSAR-TUTORIAL/` | Pulsar data formats tutorial (submodule) |
+| `Intro-to-Interferometry/` | Interferometry tutorial (submodule) |
