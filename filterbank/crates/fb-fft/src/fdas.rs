@@ -164,6 +164,14 @@ pub fn ntrials(nbins: usize, fp: &FdasParams) -> f64 {
     nbins as f64 * fp.z_grid().len() as f64 * fp.w_grid().len() as f64
 }
 
+fn search_range(nbins: usize, tsamp: f64, params: &FftSearchParams) -> (usize, usize) {
+    let t = (nbins - 1) as f64 * 2.0 * tsamp;
+    let hmax = stages(params.max_harm).last().copied().unwrap();
+    let n_lo = ((2.0 * params.f_min * t).floor() as usize).max(2);
+    let n_hi = ((2.0 * params.f_max * t * hmax as f64).ceil() as usize).min(2 * (nbins - 1));
+    (n_lo, n_hi)
+}
+
 pub fn search(spec: &[Complex32], series: &Series, fp: &FdasParams, params: &FftSearchParams) -> Vec<PeriodicCandidate> {
     let nbins = spec.len();
     let t = (nbins - 1) as f64 * 2.0 * series.tsamp();
@@ -173,9 +181,7 @@ pub fn search(spec: &[Complex32], series: &Series, fp: &FdasParams, params: &Fft
     let eng = Engine::new(halfwidth(zs[nz - 1], ws[nw - 1]));
     let kerns: Vec<Kern> = (0..nz * nw).into_par_iter().map(|k| eng.kernel(zs[k / nw], ws[k % nw])).collect();
     let st = stages(params.max_harm);
-    let hmax = *st.last().unwrap();
-    let n_lo = ((2.0 * params.f_min * t).floor() as usize).max(2);
-    let n_hi = ((2.0 * params.f_max * t * hmax as f64).ceil() as usize).min(2 * (nbins - 1));
+    let (n_lo, n_hi) = search_range(nbins, series.tsamp(), params);
     let nt = ntrials((n_hi.saturating_sub(n_lo)) / 2, fp);
     let thr: Vec<f32> = st.iter().map(|&h| power_threshold(params.sigma_threshold, h, nt)).collect();
     let idx = |v: f64, step: f64, half: usize, len: usize| -> usize {
@@ -343,12 +349,14 @@ pub fn refine(spec: &[Complex32], c: &PeriodicCandidate, tsamp: f64, fp: &FdasPa
 }
 
 pub fn search_series(series: &Series, birdies: &[(f64, f64)], fp: &FdasParams, params: &FftSearchParams) -> Vec<PeriodicCandidate> {
-    let spec = crate::prepare(series, birdies);
+    let spec = crate::prepare_width(series, birdies, 100.max((8.0 * fp.zmax) as usize));
     let mut c = search(&spec, series, fp, params);
     let n = fp.refine.min(c.len());
-    let nt = ntrials(spec.len(), fp);
+    let (n_lo, n_hi) = search_range(spec.len(), series.tsamp(), params);
+    let nt = ntrials(n_hi.saturating_sub(n_lo) / 2, fp);
     let refined: Vec<PeriodicCandidate> = c[..n].par_iter().map(|x| refine(&spec, x, series.tsamp(), fp, nt)).collect();
     c.splice(..n, refined);
+    c.retain(|x| x.sigma >= params.sigma_threshold);
     c.sort_by(|a, b| b.sigma.partial_cmp(&a.sigma).unwrap());
     c
 }

@@ -66,6 +66,7 @@ There are two ways to search for binary pulsars. Both run under `fb periodic` an
   - Like PRESTO, `zmax`/`wmax` apply to the highest harmonic summed.
   - The top `--refine 50` candidates are then optimised in `(f, ḟ, f̈)` by interpolating the spectrum, and the CSV reports the optimised values (at mid-observation).
   - Speed: 2²⁰ samples, 0.5–500 Hz, `zmax 200`, 16 harmonics takes about 5 s on an M1 Pro.
+  - The spectrum is whitened with a window of up to `8·zmax` bins, so a strongly drifting signal does not normalise itself away.
   - A jerk search costs roughly `2·wmax/dw + 1` times more.
 
 ## Mixing with PRESTO and other tools
@@ -106,7 +107,7 @@ scored = fb.classify.classify("obs.fil", res["candidates"], save_dir="cuts")  # 
   - `fb.ring.follow(key, gulp, overlap)` yields `(start_sample, block)` for your own processing.
   - `fb.ring.create/destroy` make and remove a ring.
   - `fb.ring.play("obs.dada", key)` replays a file into a ring, for testing a live setup offline.
-  - It works alongside the real psrdada tools (`dada_db`, `dada_dbdisk`, ...), since it is the same code.
+  - It uses the psrdada client code, so it should work alongside the real tools (`dada_db`, `dada_dbdisk`, ...). That has not been tested yet.
   - On macOS the default System V limits are small (4 MB, 8 segments per process), so use a small ring there.
 - **Backends:** `fb.backend.available()` returns `['cpu']` or `['cpu', 'cuda']`.
 
@@ -136,7 +137,9 @@ This writes a synthetic 8-bit filterbank with a dispersed burst and a pulsar, or
 - `fb rfi`, `fb sp` (subband and FDMT) and `fb periodic`;
 - PRESTO (`rfifind`, `prepsubband`, `single_pulse_search.py`, `realfft` + `accelsearch`) and heimdall, but only if they are on `PATH`.
 
-The table goes to the terminal and the results to `bench_work/results.json`. On an M1 Pro, CPU only (512 channels, 33.5 s of data, DM 0–600):
+The table goes to the terminal and the results to `bench_work/results.json`. The PRESTO steps use `single_pulse_search.py -b` and `rednoise` (see the comparison below).
+
+On an M1 Pro, CPU only (512 channels, 33.5 s of data, DM 0–600):
 
 | step | seconds | found |
 |---|---|---|
@@ -144,6 +147,34 @@ The table goes to the terminal and the results to `bench_work/results.json`. On 
 | `fb sp --dedisp subband` | 13.9 | DM 349.8, S/N 52 at 10.000 s (injected DM 350, 10 s) |
 | `fb sp --dedisp fdmt` | 21.9 | DM 349.8, S/N 53 |
 | `fb periodic --dm 0:120` | 9.2 | P = 0.2347 s at DM 58 (injected 0.2347 s, DM 60) |
+
+## Compared with PRESTO
+
+Synthetic data, PRESTO 2017 build (`mpifrpsr/presto` Docker image), same input files for both. It runs under amd64 emulation on a Mac, so timings are not comparable and are left out.
+
+Single pulse (burst at DM 350, 10 s; matched boxcar S/N on PRESTO's own series is 53.6):
+
+| | S/N | note |
+|---|---|---|
+| `fb sp` subband / fdmt | 52.0 / 52.7 | |
+| `single_pulse_search.py` | not found | default bad-block rejection discards the burst's block |
+| `single_pulse_search.py -b` | 32.5 | the burst inflates the block's estimated standard deviation |
+
+No method (brute, subband, fdmt, PRESTO) reported anything above 6 on one 33.5 s noise file, DM 0-300.
+
+Periodicity (sigma, after trials; 2^19 white-noise samples plus a pulsar drifting by z bins; `-numharm 8`, `zmax 200`):
+
+| z | `accelsearch` | `fb fft --zmax` |
+|---|---|---|
+| 0 | 22.1 | 22.4 |
+| 40 | 19.6 | 20.1 |
+| 120 | 9.5 | 9.1 |
+| 180 | 10.4 | 9.4 |
+| 120, with red noise | 8.3 | 9.8 |
+
+These are single realisations. The trials corrections differ: ours counts every search cell, PRESTO counts independent cells. On nine pulsar-free files (five white, four with red noise) at `zmax 200`, PRESTO listed chance candidates of 2 to 3.6 sigma on seven, one at 9.9 from residual red noise near 0.15 Hz on another, and nothing on the ninth; ours listed none above 2. In our plain FFT search (no `--zmax`), five of the nine listed something, the highest at 3.2 sigma on red noise.
+
+Not compared: RFI masks, folding, jerk search, heimdall, real telescope data.
 
 ## Where things are
 

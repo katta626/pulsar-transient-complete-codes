@@ -56,6 +56,9 @@ fn dat_inf_round_trip() {
     let dir = std::env::temp_dir().join(format!("fbdat_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     write_dat(&dir.join("obs_DM56.70"), &s).unwrap();
+    assert!(dir.join("obs_DM56.70.dat").exists() && dir.join("obs_DM56.70.inf").exists());
+    let other = Series { dm: 56.8, data: vec![1.0; 1000], ..s.clone() };
+    write_dat(&dir.join("obs_DM56.80"), &other).unwrap();
     let back = read_dat(&dir.join("obs_DM56.70.dat")).unwrap();
     assert_eq!(back.data, s.data);
     assert!((back.dm - 56.7).abs() < 1e-9);

@@ -105,13 +105,13 @@ pub fn periodic(raw: &[String]) -> Result<()> {
     }
     let prefix = a.get("o").map(PathBuf::from).unwrap_or_else(|| inputs[0].with_extension(""));
     let res = run_periodic(reader.as_mut(), &cfg)?;
-    write_csv_periodic(&prefix.with_extension("periodic.csv"), &res.sifted)?;
+    write_csv_periodic(&fb_defs::add_ext(&prefix, "periodic.csv"), &res.sifted)?;
     let folds: Vec<_> = res
         .folded
         .iter()
         .map(|f| json!({"candidate": f.candidate, "reduced_chi2": f.reduced_chi2, "profile": f.profile, "nsub": f.folded.nsub, "nchan": f.folded.nchan, "nbins": f.folded.nbins}))
         .collect();
-    save_json(&prefix.with_extension("folds.json"), &folds)?;
+    save_json(&fb_defs::add_ext(&prefix, "folds.json"), &folds)?;
     println!("{} raw -> {} sifted candidates over {} DMs; folded {}", res.raw.len(), res.sifted.len(), res.plan.ndm(), res.folded.len());
     for f in res.folded.iter().take(10) {
         println!(
@@ -127,7 +127,7 @@ pub fn periodic(raw: &[String]) -> Result<()> {
 }
 
 fn load_series(p: &Path) -> Result<Series> {
-    if p.extension().and_then(|x| x.to_str()) == Some("dat") || p.with_extension("inf").exists() && p.extension().and_then(|x| x.to_str()) != Some("fil") {
+    if p.extension().and_then(|x| x.to_str()) == Some("dat") || fb_defs::add_ext(p, "inf").exists() && p.extension().and_then(|x| x.to_str()) != Some("fil") {
         return read_dat(p);
     }
     let mut r = open_with(&[p], PsrfitsOptions::default())?;

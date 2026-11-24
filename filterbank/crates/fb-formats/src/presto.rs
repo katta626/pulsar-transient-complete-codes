@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
-use fb_defs::{DataOrder, Epoch, FbError, FreqAxis, ObsHeader, PolType, Result, RfiMask, Scaling, Series};
+use fb_defs::{add_ext, DataOrder, Epoch, FbError, FreqAxis, ObsHeader, PolType, Result, RfiMask, Scaling, Series};
 
 #[derive(Debug, Clone, Default)]
 pub struct InfData {
@@ -191,8 +191,8 @@ pub fn write_dat(root: &Path, s: &Series) -> Result<()> {
     let base = root.file_name().and_then(|x| x.to_str()).unwrap_or("data").to_string();
     let mut inf = InfData::from_header(&s.header, &base, s.dm, s.len() as u64);
     inf.lofreq = s.header.freqs.mhz.iter().cloned().fold(f64::INFINITY, f64::min);
-    inf.write(&root.with_extension("inf"))?;
-    let mut w = BufWriter::new(File::create(root.with_extension("dat"))?);
+    inf.write(&add_ext(&root, "inf"))?;
+    let mut w = BufWriter::new(File::create(add_ext(&root, "dat"))?);
     for v in &s.data {
         w.write_all(&v.to_le_bytes())?;
     }
@@ -202,9 +202,9 @@ pub fn write_dat(root: &Path, s: &Series) -> Result<()> {
 
 pub fn read_dat(root: &Path) -> Result<Series> {
     let root = root_of(root);
-    let inf = InfData::read(&root.with_extension("inf"))?;
+    let inf = InfData::read(&add_ext(&root, "inf"))?;
     let mut bytes = Vec::new();
-    File::open(root.with_extension("dat"))?.read_to_end(&mut bytes)?;
+    File::open(add_ext(&root, "dat"))?.read_to_end(&mut bytes)?;
     let data: Vec<f32> = bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
     let mut header = inf.to_header();
     header.nsamples = data.len() as u64;

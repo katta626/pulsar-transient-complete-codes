@@ -71,15 +71,15 @@ pub fn sp(raw: &[String]) -> Result<()> {
     let formats = a.get("format").unwrap_or("csv,presto");
     for f in formats.split(',') {
         match f.trim() {
-            "csv" => write_csv_single(&prefix.with_extension("cands.csv"), &res.candidates)?,
-            "presto" => write_singlepulse(&prefix.with_extension("singlepulse"), &res.candidates, &h)?,
-            "heimdall" => write_heimdall(&prefix.with_extension("cand"), &res.candidates, &h)?,
+            "csv" => write_csv_single(&fb_defs::add_ext(&prefix, "cands.csv"), &res.candidates)?,
+            "presto" => write_singlepulse(&fb_defs::add_ext(&prefix, "singlepulse"), &res.candidates, &h)?,
+            "heimdall" => write_heimdall(&fb_defs::add_ext(&prefix, "cand"), &res.candidates, &h)?,
             "" => {}
             other => return Err(FbError::Invalid(format!("unknown format '{other}'"))),
         }
     }
-    save_mask(&prefix.with_extension("mask.json"), &res.mask)?;
-    save_json(&prefix.with_extension("dmplan.json"), &res.plan)?;
+    save_mask(&fb_defs::add_ext(&prefix, "mask.json"), &res.mask)?;
+    save_json(&fb_defs::add_ext(&prefix, "dmplan.json"), &res.plan)?;
     println!(
         "{} candidates, {} DM trials ({:.1}..{:.1}), {:.1}% of the mask flagged -> {}.*",
         res.candidates.len(),

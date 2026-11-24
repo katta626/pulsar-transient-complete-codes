@@ -49,6 +49,26 @@ fn fdas_recovers_accelerated_pulsar() {
 }
 
 #[test]
+fn strong_drift_is_not_whitened_away() {
+    let n = 1 << 19;
+    let ts = 64e-6;
+    let t = n as f64 * ts;
+    let (f0, z0) = (23.4567, 180.0);
+    let s = pulsar(n, ts, f0, z0 / (t * t), 0.0, 0.1, 0.12, 11);
+    let (mut re, mut im) = (0f64, 0f64);
+    for (i, v) in s.data.iter().enumerate() {
+        let tt = i as f64 * ts - t / 2.0;
+        let a = std::f64::consts::TAU * (f0 * tt + 0.5 * z0 / (t * t) * tt * tt);
+        re += *v as f64 * a.cos();
+        im -= *v as f64 * a.sin();
+    }
+    let ideal = (re * re + im * im) / n as f64;
+    let spec = fb_fft::prepare_width(&s, &[], 8 * 200);
+    let got = fdas::power_at(&spec, f0 * t, z0, 0.0) as f64;
+    assert!(got > 0.8 * ideal, "power {got} of ideal {ideal}");
+}
+
+#[test]
 fn jerk_search_recovers_w() {
     let n = 1 << 18;
     let ts = 1e-3;

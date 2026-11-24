@@ -17,3 +17,10 @@ pub use header::{DataOrder, FreqAxis, ObsHeader, PolType, Scaling};
 pub use mask::RfiMask;
 pub use series::Series;
 pub use time::Epoch;
+
+pub fn add_ext(base: &std::path::Path, ext: &str) -> std::path::PathBuf {
+    let mut s = base.as_os_str().to_os_string();
+    s.push(".");
+    s.push(ext);
+    s.into()
+}

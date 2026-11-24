@@ -133,14 +133,18 @@ def main():
         add("presto", "prepsubband", dt, ok)
         dats = sorted(d.glob("bench_DM*.dat"))
         if dats and shutil.which("single_pulse_search.py"):
-            dt, ok = run(["single_pulse_search.py", "--noplot", *[p.name for p in dats]], d)
+            dt, ok = run(["single_pulse_search.py", "-b", "--noplot", *[p.name for p in dats]], d)
             add("presto", "single_pulse_search.py", dt, ok, read_singlepulse(d.glob("bench_DM*.singlepulse")) if ok else None)
         target = min(dats, key=lambda p: abs(float(p.stem.split("DM")[1]) - pulsar[0])) if dats else None
         if target is not None and shutil.which("accelsearch"):
             t0 = time.perf_counter()
             ok = run(["realfft", target.name], d)[1]
-            ok = ok and run(["accelsearch", "-zmax", "0", "-numharm", "16", target.with_suffix(".fft").name], d)[1]
-            add("presto", "realfft + accelsearch (one DM)", time.perf_counter() - t0, ok)
+            red = target.with_name(target.stem + "_red.fft")
+            ok = ok and run(["rednoise", target.with_suffix(".fft").name], d)[1]
+            if ok and not red.with_suffix(".inf").exists():
+                shutil.copy(target.with_suffix(".inf"), red.with_suffix(".inf"))
+            ok = ok and run(["accelsearch", "-zmax", "0", "-numharm", "16", "-flo", "0.5", red.name], d)[1]
+            add("presto", "realfft + rednoise + accelsearch (one DM)", time.perf_counter() - t0, ok)
 
     if "heimdall" not in skip and shutil.which("heimdall"):
         d = work / "heimdall"

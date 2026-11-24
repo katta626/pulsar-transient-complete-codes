@@ -56,7 +56,7 @@ pub fn deredden(spec: &mut [Complex32], start_width: usize, end_width: usize) {
         let med = (p[mid] / std::f32::consts::LN_2).max(1e-30);
         meds.push((0.5 * (lo + hi) as f64, med));
         lo = hi;
-        w = ((w as f64 * (1.0 + (w as f64).ln() / 6.0)) as usize).max(w + 1).min(end_width.max(start_width));
+        w = ((w as f64 * (1.0 + (w as f64).ln() / 6.0)) as usize).max(w + 1).min(end_width.max(start_width)).min(lo.max(100));
     }
     let mut k = 0usize;
     for (i, c) in spec.iter_mut().enumerate().skip(1) {
@@ -210,6 +210,10 @@ pub fn search_spectrum(spec: &[Complex32], series: &Series, accel: f64, params: 
 }
 
 pub fn prepare(series: &Series, birdies: &[(f64, f64)]) -> Vec<Complex32> {
+    prepare_width(series, birdies, 100)
+}
+
+pub fn prepare_width(series: &Series, birdies: &[(f64, f64)], end_width: usize) -> Vec<Complex32> {
     let n = good_size(series.len());
     let (mean, _) = series.mean_std();
     let mut x: Vec<f32> = series.data.iter().map(|v| *v - mean as f32).collect();
@@ -217,7 +221,7 @@ pub fn prepare(series: &Series, birdies: &[(f64, f64)]) -> Vec<Complex32> {
     let mut spec = rfft(&x);
     let t_obs = n as f64 * series.tsamp();
     zap(&mut spec, t_obs, birdies);
-    deredden(&mut spec, 6, 100);
+    deredden(&mut spec, 6, end_width);
     spec
 }
 

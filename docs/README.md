@@ -34,5 +34,5 @@ Design: see `reference/06-our-plan.md` (the earlier `reports/unified-search-stac
 2. CPU single-pulse pipeline (RFI, brute/subband/FDMT dedispersion, boxcar, clustering) — done.
 3. CUDA backend — kernels for dedispersion, FDMT, zero-DM, boxcar and FFT periodicity search. Every kernel matches the CPU code under the CPU emulator (`tests/test_cuda_emu.py`); not yet compiled with `nvcc` or run on a GPU.
 4. Real-time Diamond Array pipeline — growing-file follower, PSRDADA shared-memory ring reader/writer and classifier done.
-5. Periodicity search and folding (FFT, time-domain and Fourier-domain acceleration, jerk search with candidate optimisation, FFA, sift, fold, TOAs) — done.
-6. Vendoring of upstream engines (dmt, PRESTO accelsearch/coherentsearch, riptide core), benchmarks against the originals.
+5. Periodicity search and folding (FFT, time-domain and Fourier-domain acceleration, jerk search with candidate optimisation, FFA, sift, fold, TOAs) — done, except the coherent harmonic search, which is not implemented (harmonic sums are incoherent).
+6. Vendoring of upstream engines (dmt, PRESTO accelsearch/coherentsearch, riptide core), benchmarks against the originals (PRESTO results compared in [usage.md](usage.md#compared-with-presto); heimdall needs an NVIDIA GPU).
