@@ -50,6 +50,23 @@ pub struct Event {
     pub snr: f32,
 }
 
+pub fn boxcar_noise(cs: &[f64], w: usize) -> (f64, f64) {
+    let n = cs.len() - 1;
+    let m = n + 1 - w;
+    let step = (m / 16384).max(1);
+    let mut y: Vec<f64> = (0..m).step_by(step).map(|i| cs[i + w] - cs[i]).collect();
+    if y.len() < 32 {
+        return (0.0, 1.0 / (w as f64).sqrt());
+    }
+    let mid = y.len() / 2;
+    y.select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap());
+    let med = y[mid];
+    let mut d: Vec<f64> = y.iter().map(|v| (v - med).abs()).collect();
+    d.select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap());
+    let sd = 1.4826 * d[mid];
+    (med, if sd > 0.0 { 1.0 / sd } else { 1.0 / (w as f64).sqrt() })
+}
+
 pub fn boxcar_search(x: &[f32], widths: &[usize], threshold: f32) -> Vec<Event> {
     let n = x.len();
     let mut cs = vec![0f64; n + 1];
@@ -61,10 +78,10 @@ pub fn boxcar_search(x: &[f32], widths: &[usize], threshold: f32) -> Vec<Event> 
         if w > n {
             break;
         }
-        let norm = 1.0 / (w as f64).sqrt();
+        let (offset, norm) = boxcar_noise(&cs, w);
         let mut best: Option<Event> = None;
         for i in 0..=n - w {
-            let s = ((cs[i + w] - cs[i]) * norm) as f32;
+            let s = ((cs[i + w] - cs[i] - offset) * norm) as f32;
             if s >= threshold {
                 match best {
                     Some(ref mut b) if i <= b.sample + w => {

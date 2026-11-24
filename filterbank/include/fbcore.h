@@ -36,6 +36,8 @@ char *fb_presto_mask_read(const char *path, const char *header_json);
 int64_t fb_presto_mask_write(const char *mask_json, double tsamp, const char *path);
 
 char *fb_dat_info(const char *path);
+char *fb_fdmt_setup(const char *header_json, const char *plan_json, uint64_t nsamp, const uint8_t *killmask);
+double fb_sigma_from_power(double power, uint32_t numharm, double ntrials);
 char *fb_dada_layout(const char *header_text, int sum_pols);
 int64_t fb_dada_decode(const char *header_text, int sum_pols, const uint8_t *bytes, uint64_t nbytes, float *out, uint64_t cap);
 int64_t fb_dat_read(const char *path, float *out, uint64_t cap);

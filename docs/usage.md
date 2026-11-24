@@ -120,7 +120,30 @@ cd filterbank && make cuda
 
 - This builds `cuda/build/libfbcuda.so`, or set `FB_CUDA_LIB` to its path.
 - `fb.dedisp.dedisperse(..., backend="cuda")` then runs dedispersion on the GPU, using the same delay table as the CPU code, so both give identical integer delays.
+- With `method="fdmt"` it runs FDMT on the GPU instead. It executes the same schedule that the Rust code builds.
 - Zero-DM and boxcar kernels are also available, as `fb.cuda.zero_dm` and `fb.cuda.boxcar_snr`.
+- `fb.cuda.fft_search(series, tsamp, f_min, f_max, max_harm, sigma)` runs a batched FFT periodicity search over many dedispersed series at once (cuFFT, dereddening, interbinning, harmonic sums). It returns one candidate list per series.
+- **Without a GPU:** `tests/test_cuda_emu.py` compiles `fbcuda.cu` against small stand-in CUDA headers and runs the kernels on CPU threads. It compares each one with the CPU code, so kernel logic can be checked on a Mac. It is slow, about 30 s for the tests, and is for correctness only.
+
+## Benchmarks
+
+```bash
+python filterbank/bench/bench.py --nchan 512 --nsamp 524288 --dm-hi 600
+```
+
+This writes a synthetic 8-bit filterbank with a dispersed burst and a pulsar, or uses `--file obs.fil`. It then times each step and reports what was found:
+
+- `fb rfi`, `fb sp` (subband and FDMT) and `fb periodic`;
+- PRESTO (`rfifind`, `prepsubband`, `single_pulse_search.py`, `realfft` + `accelsearch`) and heimdall, but only if they are on `PATH`.
+
+The table goes to the terminal and the results to `bench_work/results.json`. On an M1 Pro, CPU only (512 channels, 33.5 s of data, DM 0–600):
+
+| step | seconds | found |
+|---|---|---|
+| `fb rfi` | 0.7 | |
+| `fb sp --dedisp subband` | 13.9 | DM 349.8, S/N 52 at 10.000 s (injected DM 350, 10 s) |
+| `fb sp --dedisp fdmt` | 21.9 | DM 349.8, S/N 53 |
+| `fb periodic --dm 0:120` | 9.2 | P = 0.2347 s at DM 58 (injected 0.2347 s, DM 60) |
 
 ## Where things are
 

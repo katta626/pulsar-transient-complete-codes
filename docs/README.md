@@ -32,7 +32,7 @@ Design: see `reference/06-our-plan.md` (the earlier `reports/unified-search-stac
 0. Restructure the repo, keep converter output byte-identical — done.
 1. Shared definitions and Rust I/O (PSRFITS, SIGPROC, DADA, PRESTO formats) — done.
 2. CPU single-pulse pipeline (RFI, brute/subband/FDMT dedispersion, boxcar, clustering) — done.
-3. CUDA backend — first kernels written (dedispersion, zero-DM, boxcar); not yet compiled or tested on a GPU.
+3. CUDA backend — kernels for dedispersion, FDMT, zero-DM, boxcar and FFT periodicity search. Every kernel matches the CPU code under the CPU emulator (`tests/test_cuda_emu.py`); not yet compiled with `nvcc` or run on a GPU.
 4. Real-time Diamond Array pipeline — growing-file follower, PSRDADA shared-memory ring reader/writer and classifier done.
 5. Periodicity search and folding (FFT, time-domain and Fourier-domain acceleration, jerk search with candidate optimisation, FFA, sift, fold, TOAs) — done.
 6. Vendoring of upstream engines (dmt, PRESTO accelsearch/coherentsearch, riptide core), benchmarks against the originals.

@@ -69,6 +69,18 @@ fn fdmt_matches_brute_force() {
 }
 
 #[test]
+fn chunked_fdmt_is_identical() {
+    let tsamp = 256e-6;
+    let b = synth(64, 1 << 14, 200.0, 1.0, tsamp);
+    let plan = DmPlan::linear(b.header.freqs.clone(), tsamp, 0.0, 300.0, 1.0).unwrap();
+    let full = fb_dedisp::fdmt::fdmt_chunked(&b, &plan, None, usize::MAX / 4).unwrap();
+    let small = fb_dedisp::fdmt::fdmt_chunked(&b, &plan, None, 1 << 18).unwrap();
+    assert_eq!(full.nout, small.nout);
+    let maxdiff = full.data.iter().zip(&small.data).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
+    assert!(maxdiff < 1e-3, "max diff {maxdiff}");
+}
+
+#[test]
 #[ignore]
 fn bench_4096_channels() {
     let tsamp = 64e-6;

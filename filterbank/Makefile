@@ -28,6 +28,7 @@ test: all
 	$(PY) tests/test_toa_cli.py
 	$(PY) tests/test_classify_realtime.py
 	$(PY) tests/test_ring.py
+	$(PY) tests/test_cuda_emu.py
 
 clean:
 	$(CARGO) clean

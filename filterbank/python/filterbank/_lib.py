@@ -54,6 +54,8 @@ _SIGS = {
     "fb_presto_mask_write": ([_s, C.c_double, _s], C.c_int64),
     "fb_dat_info": ([_s], _p),
     "fb_dada_layout": ([_s, C.c_int], _p),
+    "fb_fdmt_setup": ([_s, _s, C.c_uint64, _u8p], _p),
+    "fb_sigma_from_power": ([C.c_double, C.c_uint32, C.c_double], C.c_double),
     "fb_dada_decode": ([_s, C.c_int, _u8p, C.c_uint64, _f32p, C.c_uint64], C.c_int64),
     "fb_dat_read": ([_s, _f32p, C.c_uint64], C.c_int64),
     "fb_dat_write": ([_s, _s, C.c_double, C.c_double, _f32p, C.c_uint64], C.c_int64),

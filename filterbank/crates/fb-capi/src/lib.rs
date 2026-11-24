@@ -483,3 +483,32 @@ pub extern "C" fn fb_dada_decode(text: *const c_char, sum_pols: i32, bytes: *con
         Ok((nbytes as usize / l.bytes_per_sample().max(1)) as i64)
     })
 }
+
+#[no_mangle]
+pub extern "C" fn fb_fdmt_setup(header_json: *const c_char, plan_json: *const c_char, nsamp: u64, killmask: *const u8) -> *mut c_char {
+    guard_ptr!({
+        let h: ObsHeader = jparse(header_json)?;
+        let p: DmPlan = jparse(plan_json)?;
+        let kill: Option<Vec<bool>> = if killmask.is_null() {
+            None
+        } else {
+            Some(unsafe { std::slice::from_raw_parts(killmask, h.nchan()) }.iter().map(|v| *v != 0).collect())
+        };
+        let s = fb_dedisp::fdmt::FdmtSetup::new(&h, &p, nsamp as usize, kill.as_deref());
+        let levels: Vec<serde_json::Value> = s
+            .plan
+            .levels
+            .iter()
+            .map(|l| json!({"lo": l.rows.iter().map(|r| r.lo).collect::<Vec<_>>(), "hi": l.rows.iter().map(|r| r.hi).collect::<Vec<_>>(), "shift": l.rows.iter().map(|r| r.shift).collect::<Vec<_>>()}))
+            .collect();
+        jstr(&json!({
+            "nf": s.plan.nf, "dt0": s.plan.dt0, "max_rows": s.plan.max_rows, "levels": levels,
+            "order": s.order, "out_rows": s.out_rows, "out_shift": s.out_shift, "nout": s.nout
+        }))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn fb_sigma_from_power(power: f64, numharm: u32, ntrials: f64) -> f64 {
+    fb_fft::stats::sigma_from_power(power, numharm, ntrials)
+}

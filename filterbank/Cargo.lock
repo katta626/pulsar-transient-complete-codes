@@ -45,6 +45,7 @@ version = "0.1.0"
 dependencies = [
  "fb-dedisp",
  "fb-defs",
+ "fb-fft",
  "fb-formats",
  "fb-io",
  "fb-pipeline",

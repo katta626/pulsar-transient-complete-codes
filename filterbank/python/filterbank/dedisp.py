@@ -30,6 +30,8 @@ def dedisperse(header, p, data, killmask=None, nsub=0, backend="auto", method=No
         raise ValueError(f"need more than {maxd} samples for this plan")
     if be == "cuda":
         from . import cuda as CU
+        if method == "fdmt":
+            return CU.fdmt(h, p, d, killmask)
         return CU.dedisperse(d, table, maxd, killmask)
     out = np.empty((len(p["dms"]), nout), dtype=np.float32)
     km = None

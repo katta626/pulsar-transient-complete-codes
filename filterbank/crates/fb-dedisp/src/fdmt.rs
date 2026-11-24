@@ -7,21 +7,21 @@ fn dt_for(max_dt: usize, f_lo: f64, f_hi: f64, f_min: f64, f_max: f64) -> usize 
     (((max_dt as f64 - 1.0) * (f_lo.powi(-2) - f_hi.powi(-2)) / (f_min.powi(-2) - f_max.powi(-2))).ceil().max(0.0)) as usize
 }
 
-struct Row {
-    lo: usize,
-    hi: usize,
-    shift: usize,
+pub struct Row {
+    pub lo: usize,
+    pub hi: usize,
+    pub shift: usize,
 }
 
-struct Level {
-    rows: Vec<Row>,
+pub struct Level {
+    pub rows: Vec<Row>,
 }
 
 pub struct FdmtPlan {
-    nf: usize,
-    dt0: usize,
-    levels: Vec<Level>,
-    max_rows: usize,
+    pub nf: usize,
+    pub dt0: usize,
+    pub levels: Vec<Level>,
+    pub max_rows: usize,
 }
 
 impl FdmtPlan {
@@ -110,50 +110,79 @@ pub fn transform(image: &[f32], nf: usize, nt: usize, f_min: f64, f_max: f64, ma
     FdmtPlan::new(nf, f_min, f_max, max_dt).execute(image, nt)
 }
 
-pub fn fdmt(block: &Block, plan: &DmPlan, killmask: Option<&[bool]>) -> Result<DedispOutput> {
-    check(block, plan)?;
-    let h = &block.header;
-    let nchan = h.nchan();
-    let nt = block.nsamp;
-    let bw = h.freqs.chan_bw.abs();
-    let ascending: Vec<usize> = {
+pub struct FdmtSetup {
+    pub plan: FdmtPlan,
+    pub order: Vec<i64>,
+    pub out_rows: Vec<usize>,
+    pub out_shift: Vec<usize>,
+    pub nout: usize,
+}
+
+impl FdmtSetup {
+    pub fn new(h: &fb_defs::ObsHeader, plan: &DmPlan, nt: usize, killmask: Option<&[bool]>) -> Self {
+        let nchan = h.nchan();
+        let bw = h.freqs.chan_bw.abs();
         let mut idx: Vec<usize> = (0..nchan).collect();
         idx.sort_by(|a, b| h.freqs.mhz[*a].partial_cmp(&h.freqs.mhz[*b]).unwrap());
-        idx
-    };
-    let f_min = h.freqs.mhz[ascending[0]] - bw / 2.0;
-    let nf = nchan.next_power_of_two();
-    let f_max = f_min + nf as f64 * bw;
-    let tsamp = plan.tsamp;
-    let dm_max = plan.dms.iter().cloned().fold(0.0, f64::max);
-    let max_dt = ((plan.k_dm * dm_max * (f_min.powi(-2) - f_max.powi(-2)) / tsamp).ceil() as usize + 2).min(nt);
-    let mut image = vec![0f32; nf * nt];
-    image.par_chunks_mut(nt).enumerate().for_each(|(row, dst)| {
-        if row >= nchan {
-            return;
-        }
-        let c = ascending[row];
-        if killmask.map(|k| k[c]).unwrap_or(false) {
-            return;
-        }
-        for (t, v) in dst.iter_mut().enumerate() {
-            *v = block.data[t * nchan + c];
-        }
-    });
-    let dmt = transform(&image, nf, nt, f_min, f_max, max_dt);
-    let ndt = dmt.len() / nt;
-    let maxd = plan.max_delay_samples();
-    let nout = nt - maxd;
+        let f_min = h.freqs.mhz[idx[0]] - bw / 2.0;
+        let nf = nchan.next_power_of_two();
+        let f_max = f_min + nf as f64 * bw;
+        let tsamp = plan.tsamp;
+        let dm_max = plan.dms.iter().cloned().fold(0.0, f64::max);
+        let max_dt = ((plan.k_dm * dm_max * (f_min.powi(-2) - f_max.powi(-2)) / tsamp).ceil() as usize + 2).min(nt);
+        let fp = FdmtPlan::new(nf, f_min, f_max, max_dt);
+        let ndt = fp.ndt();
+        let order = (0..nf)
+            .map(|r| if r < nchan && !killmask.map(|k| k[idx[r]]).unwrap_or(false) { idx[r] as i64 } else { -1 })
+            .collect();
+        let out_rows = plan.dms.iter().map(|dm| ((plan.k_dm * dm * (f_min.powi(-2) - f_max.powi(-2)) / tsamp).round() as usize).min(ndt - 1)).collect();
+        let out_shift = plan.dms.iter().map(|dm| (plan.k_dm * dm * (f_min.powi(-2) - plan.f_ref.powi(-2)) / tsamp).round() as usize).collect();
+        Self { plan: fp, order, out_rows, out_shift, nout: nt - plan.max_delay_samples() }
+    }
+}
+
+pub fn fdmt(block: &Block, plan: &DmPlan, killmask: Option<&[bool]>) -> Result<DedispOutput> {
+    fdmt_chunked(block, plan, killmask, 1 << 28)
+}
+
+pub fn fdmt_chunked(block: &Block, plan: &DmPlan, killmask: Option<&[bool]>, budget_floats: usize) -> Result<DedispOutput> {
+    check(block, plan)?;
+    let nchan = block.header.nchan();
+    let nt = block.nsamp;
+    let st = FdmtSetup::new(&block.header, plan, nt, killmask);
+    let nf = st.plan.nf;
+    let depth = st.plan.ndt() + 2;
+    let per_t = 2 * st.plan.max_rows.max(nf);
+    let nc = (budget_floats / per_t).saturating_sub(depth).max(depth).max(256).min(nt);
+    let nout = st.nout;
     let mut data = vec![0f32; plan.ndm() * nout];
-    data.par_chunks_mut(nout).enumerate().for_each(|(d, out)| {
-        let dm = plan.dms[d];
-        let dt = ((plan.k_dm * dm * (f_min.powi(-2) - f_max.powi(-2)) / tsamp).round() as usize).min(ndt - 1);
-        let shift = (plan.k_dm * dm * (f_min.powi(-2) - plan.f_ref.powi(-2)) / tsamp).round() as usize;
-        let row = &dmt[dt * nt..(dt + 1) * nt];
-        for (t, o) in out.iter_mut().enumerate() {
-            let src = t + shift;
-            *o = if src < nt { row[src] } else { 0.0 };
-        }
-    });
+    let mut c0 = 0usize;
+    while c0 < nt {
+        let c1 = (c0 + nc).min(nt);
+        let s = c0 - depth.min(c0);
+        let len = c1 - s;
+        let mut image = vec![0f32; nf * len];
+        image.par_chunks_mut(len).enumerate().for_each(|(row, dst)| {
+            if st.order[row] < 0 {
+                return;
+            }
+            let c = st.order[row] as usize;
+            for (i, v) in dst.iter_mut().enumerate() {
+                *v = block.data[(s + i) * nchan + c];
+            }
+        });
+        let dmt = st.plan.execute(&image, len);
+        data.par_chunks_mut(nout).enumerate().for_each(|(d, out)| {
+            let row = &dmt[st.out_rows[d] * len..(st.out_rows[d] + 1) * len];
+            let shift = st.out_shift[d];
+            for tp in c0.max(shift)..c1 {
+                let t = tp - shift;
+                if t < nout {
+                    out[t] = row[tp - s];
+                }
+            }
+        });
+        c0 = c1;
+    }
     Ok(DedispOutput { ndm: plan.ndm(), nout, data })
 }
