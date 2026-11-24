@@ -19,7 +19,7 @@ def delay_table(p):
     return out, maxd
 
 
-def dedisperse(header, p, data, killmask=None, nsub=0, backend="auto"):
+def dedisperse(header, p, data, killmask=None, nsub=0, backend="auto", method=None):
     h = Header(header).intensity()
     d = data[:, 0, :] if data.ndim == 3 else data
     d, ptr = L.f32(d)
@@ -36,5 +36,8 @@ def dedisperse(header, p, data, killmask=None, nsub=0, backend="auto"):
     if killmask is not None:
         kmask = np.ascontiguousarray(killmask, dtype=np.uint8)
         km = kmask.ctypes.data_as(L._u8p)
-    n = L.check(L.lib.fb_dedisperse(L.enc(h.core()), L.enc(dict(p)), ptr, d.shape[0], km, nsub, out.ctypes.data_as(L._f32p), out.size))
+    if method is None:
+        method = "subband" if nsub else ("subband" if h.nchan >= 256 else "brute")
+    code = {"brute": 0, "fdmt": 0xFFFFFFFF, "subband": nsub or max(16, 1 << int(np.ceil(np.log2(np.sqrt(h.nchan)))))}[method]
+    n = L.check(L.lib.fb_dedisperse(L.enc(h.core()), L.enc(dict(p)), ptr, d.shape[0], km, code, out.ctypes.data_as(L._f32p), out.size))
     return out[:, :n]

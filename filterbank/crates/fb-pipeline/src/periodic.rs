@@ -5,7 +5,7 @@ use fb_fold::{FoldParams, Folded};
 use fb_io::Reader;
 use rayon::prelude::*;
 
-use crate::single_pulse::RfiConfig;
+use crate::single_pulse::{Dedisperser, RfiConfig};
 
 #[derive(Debug, Clone)]
 pub struct PeriodicConfig {
@@ -27,6 +27,7 @@ pub struct PeriodicConfig {
     pub nsub: usize,
     pub rfi: RfiConfig,
     pub external_mask: Option<RfiMask>,
+    pub dedisperser: Dedisperser,
 }
 
 impl Default for PeriodicConfig {
@@ -50,6 +51,7 @@ impl Default for PeriodicConfig {
             nsub: 32,
             rfi: RfiConfig::default(),
             external_mask: None,
+            dedisperser: Dedisperser::Auto,
         }
     }
 }
@@ -103,7 +105,7 @@ pub fn build_mask(reader: &mut dyn Reader, rfi: &RfiConfig, external: Option<&Rf
     Ok(mask)
 }
 
-pub fn dedisperse_all(reader: &mut dyn Reader, plan: &DmPlan, dm_idx: &[usize], mask: &RfiMask, zero_dm: bool, gulp: usize) -> Result<Vec<Series>> {
+pub fn dedisperse_all(reader: &mut dyn Reader, plan: &DmPlan, dm_idx: &[usize], mask: &RfiMask, zero_dm: bool, gulp: usize, ded: Dedisperser) -> Result<Vec<Series>> {
     let h = reader.header();
     let sub = DmPlan::from_list(plan.freqs.clone(), plan.tsamp, dm_idx.iter().map(|&i| plan.dms[i]).collect())?;
     let maxd = plan.max_delay_samples();
@@ -123,7 +125,7 @@ pub fn dedisperse_all(reader: &mut dyn Reader, plan: &DmPlan, dm_idx: &[usize], 
         }
         let means: Vec<f32> = fb_rfi::stats::channel_stats(&b.data, b.nsamp, b.nchan()).mean.iter().map(|m| *m as f32).collect();
         b.apply_mask(mask, Some(&means))?;
-        let r = fb_dedisp::brute_force(&b, &sub, kill.as_deref())?;
+        let r = ded.run(&b, &sub, kill.as_deref())?;
         let take = r.nout.min(gulp).min(total_out - s as usize);
         for d in 0..sub.ndm() {
             out[d].extend_from_slice(&r.trial(d)[..take]);
@@ -197,7 +199,7 @@ pub fn run_periodic(reader: &mut dyn Reader, cfg: &PeriodicConfig) -> Result<Per
     let mut raw = Vec::new();
     let idx: Vec<usize> = (0..plan.ndm()).collect();
     for batch in idx.chunks(cfg.dm_batch.max(1)) {
-        let series = dedisperse_all(reader, &plan, batch, &mask, cfg.rfi.zero_dm, cfg.gulp)?;
+        let series = dedisperse_all(reader, &plan, batch, &mask, cfg.rfi.zero_dm, cfg.gulp, cfg.dedisperser)?;
         let found: Vec<PeriodicCandidate> = series.par_iter().flat_map(|s| search_one(s, cfg)).collect();
         raw.extend(found);
     }

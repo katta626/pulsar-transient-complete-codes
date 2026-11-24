@@ -14,13 +14,13 @@ use crate::args::Args;
 
 pub const PERIODIC_USAGE: &str = "fb periodic INPUT... [-o PREFIX] [--dm LO:HI] [--dm-step S] [--fmin 0.1] [--fmax 2000]
        [--harm 16] [--sigma 6] [--accel MAX] [--accel-tol 1.1] [--ffa] [--pmin 0.5] [--pmax 30]
-       [--no-fft] [--fold N] [--nbins 64] [--min-dm-hits 1] [--zap FREQ:WIDTH,...] [--mask FILE] [--zero-dm]";
+       [--no-fft] [--fold N] [--nbins 64] [--dedisp auto|brute|subband|fdmt] [--min-dm-hits 1] [--zap FREQ:WIDTH,...] [--mask FILE] [--zero-dm]";
 
 pub const SERIES_USAGE: &str = "fb fft SERIES(.dat|.tim) [--fmin] [--fmax] [--harm] [--sigma] [--accel MAX] [-o OUT.csv]
 fb ffa SERIES(.dat|.tim) [--pmin] [--pmax] [--snr 7] [-o OUT.csv]
 fb fold SERIES|FILTERBANK --period P [--pdot PD] [--dm DM] [--nbins 64] [-o OUT.json]";
 
-const VALUED: &[&str] = &["o", "dm", "dm-step", "fmin", "fmax", "harm", "sigma", "accel", "accel-tol", "pmin", "pmax", "fold", "nbins", "min-dm-hits", "zap", "mask", "snr", "period", "pdot", "nsub", "gulp"];
+const VALUED: &[&str] = &["o", "dm", "dm-step", "fmin", "fmax", "harm", "sigma", "accel", "accel-tol", "pmin", "pmax", "fold", "nbins", "min-dm-hits", "zap", "mask", "snr", "period", "pdot", "nsub", "gulp", "dedisp", "subband"];
 
 fn e(s: String) -> FbError {
     FbError::Invalid(s)
@@ -82,6 +82,8 @@ pub fn periodic(raw: &[String]) -> Result<()> {
     cfg.min_dm_hits = a.num("min-dm-hits", 1usize).map_err(e)?;
     cfg.birdies = birdies(&a)?;
     cfg.rfi.zero_dm = a.flag("zero-dm");
+    cfg.dedisperser = fb_pipeline::Dedisperser::parse(a.get("dedisp").unwrap_or("auto"), a.num("subband", 64usize).map_err(e)?)
+        .ok_or_else(|| e("--dedisp auto|brute|subband|fdmt".into()))?;
     cfg.gulp = a.num("gulp", 1usize << 18).map_err(e)?;
     if let Some(m) = a.get("mask") {
         let p = Path::new(m);

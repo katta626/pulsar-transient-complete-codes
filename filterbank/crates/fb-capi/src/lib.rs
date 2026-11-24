@@ -228,7 +228,9 @@ pub extern "C" fn fb_dedisperse(
         } else {
             Some(unsafe { std::slice::from_raw_parts(killmask, b.nchan()) }.iter().map(|v| *v != 0).collect())
         };
-        let r = if nsub > 0 {
+        let r = if nsub == u32::MAX {
+            fb_dedisp::fdmt(&b, &p, kill.as_deref())?
+        } else if nsub > 0 {
             fb_dedisp::subband(&b, &p, nsub as usize, kill.as_deref())?
         } else {
             fb_dedisp::brute_force(&b, &p, kill.as_deref())?
@@ -429,6 +431,9 @@ pub extern "C" fn fb_run_sp(paths_json: *const c_char, cfg_json: *const c_char) 
         }
         if let Some(v) = f("subband") {
             cfg.dedisperser = Dedisperser::Subband(v as usize);
+        }
+        if let Some(m) = c.get("dedisp").and_then(|v| v.as_str()) {
+            cfg.dedisperser = Dedisperser::parse(m, f("subband").unwrap_or(64.0) as usize).ok_or_else(|| FbError::Invalid(format!("dedisp '{m}'")))?;
         }
         if let Some(v) = b("zero_dm") {
             cfg.rfi.zero_dm = v;

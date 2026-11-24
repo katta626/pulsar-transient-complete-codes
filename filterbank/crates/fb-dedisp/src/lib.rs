@@ -1,3 +1,7 @@
+pub mod fdmt;
+
+pub use fdmt::fdmt;
+
 use fb_defs::{Block, DmPlan, FbError, Result, Series};
 use rayon::prelude::*;
 
@@ -80,45 +84,55 @@ pub fn subband(block: &Block, plan: &DmPlan, nsub: usize, killmask: Option<&[boo
     let per = nchan.div_ceil(nsub);
     let maxd = plan.max_delay_samples();
     let nout = nsamp - maxd;
+    let tsamp = plan.tsamp;
     let tr = transpose(block);
     let use_chan: Vec<bool> = match killmask {
         Some(k) => k.iter().map(|b| !b).collect(),
         None => vec![true; nchan],
     };
-    let mut data = vec![0f32; plan.ndm() * nout];
     let groups: Vec<(usize, usize)> = (0..nsub).map(|s| (s * per, ((s + 1) * per).min(nchan))).filter(|g| g.0 < g.1).collect();
-    let ref_chan: Vec<usize> = groups.iter().map(|g| (g.0 + g.1) / 2).collect();
-    let nominal: Vec<f64> = {
-        let mut v = Vec::new();
-        let step = ((plan.ndm() as f64).sqrt().ceil() as usize).max(1);
-        let mut i = 0;
-        while i < plan.ndm() {
-            v.push(plan.dms[(i + step / 2).min(plan.ndm() - 1)]);
-            i += step;
-        }
-        v
-    };
-    let step = ((plan.ndm() as f64).sqrt().ceil() as usize).max(1);
-    let tsamp = plan.tsamp;
-    data.par_chunks_mut(nout).enumerate().for_each(|(d, out)| {
-        let g_dm = nominal[(d / step).min(nominal.len() - 1)];
-        for (gi, g) in groups.iter().enumerate() {
-            let rc = ref_chan[gi];
-            let coarse = (plan.delay_seconds(plan.dms[d], rc) / tsamp).round() as i64;
-            for c in g.0..g.1 {
-                if !use_chan[c] {
-                    continue;
+    let ref_chan: Vec<usize> = groups
+        .iter()
+        .map(|g| (g.0..g.1).max_by(|a, b| plan.freqs.mhz[*a].partial_cmp(&plan.freqs.mhz[*b]).unwrap()).unwrap())
+        .collect();
+    let ndm = plan.ndm();
+    let step = ((ndm as f64).sqrt().ceil() as usize).max(1);
+    let mut data = vec![0f32; ndm * nout];
+    let blocks: Vec<(usize, usize)> = (0..ndm).step_by(step).map(|i| (i, (i + step).min(ndm))).collect();
+    for (d0, d1) in blocks {
+        let g_dm = plan.dms[(d0 + d1) / 2];
+        let sub_len = nsamp;
+        let subs: Vec<Vec<f32>> = groups
+            .par_iter()
+            .enumerate()
+            .map(|(gi, g)| {
+                let rc = ref_chan[gi];
+                let mut acc = vec![0f32; sub_len];
+                for c in g.0..g.1 {
+                    if !use_chan[c] {
+                        continue;
+                    }
+                    let fine = ((plan.delay_seconds(g_dm, c) - plan.delay_seconds(g_dm, rc)) / tsamp).round().max(0.0) as usize;
+                    let src = &tr[c * nsamp..(c + 1) * nsamp];
+                    let n = nsamp - fine;
+                    for (o, s) in acc[..n].iter_mut().zip(&src[fine..]) {
+                        *o += *s;
+                    }
                 }
-                let fine = ((plan.delay_seconds(g_dm, c) - plan.delay_seconds(g_dm, rc)) / tsamp).round() as i64;
-                let off = (coarse + fine).clamp(0, maxd as i64) as usize;
-                let src = &tr[c * nsamp + off..c * nsamp + off + nout];
-                for (o, s) in out.iter_mut().zip(src) {
+                acc
+            })
+            .collect();
+        data[d0 * nout..d1 * nout].par_chunks_mut(nout).enumerate().for_each(|(k, out)| {
+            let d = d0 + k;
+            for (gi, sub) in subs.iter().enumerate() {
+                let coarse = ((plan.delay_seconds(plan.dms[d], ref_chan[gi])) / tsamp).round().clamp(0.0, maxd as f64) as usize;
+                for (o, s) in out.iter_mut().zip(&sub[coarse..coarse + nout]) {
                     *o += *s;
                 }
             }
-        }
-    });
-    Ok(DedispOutput { ndm: plan.ndm(), nout, data })
+        });
+    }
+    Ok(DedispOutput { ndm, nout, data })
 }
 
 pub fn to_series(block: &Block, plan: &DmPlan, out: &DedispOutput, i: usize) -> Series {

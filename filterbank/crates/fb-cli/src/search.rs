@@ -10,7 +10,7 @@ use fb_pipeline::{run_single_pulse, Dedisperser, SinglePulseConfig};
 use crate::args::Args;
 
 pub const SP_USAGE: &str = "fb sp INPUT... [-o PREFIX] [--dm LO:HI] [--dm-step S] [--dm-tol 1.25] [--width-s 0.001]
-       [--threshold 6] [--max-width 4096] [--gulp N] [--subband NSUB] [--mask FILE]
+       [--threshold 6] [--max-width 4096] [--gulp N] [--dedisp auto|brute|subband|fdmt] [--subband NSUB] [--mask FILE]
        [--zero-dm] [--no-iqrm] [--sk] [--stats] [--format csv,presto,heimdall]";
 
 pub const RFI_USAGE: &str = "fb rfi INPUT... [-o MASK.json] [--interval 1.0] [--iqrm-threshold 3] [--sk] [--stats]
@@ -40,9 +40,9 @@ fn config(a: &Args) -> Result<SinglePulseConfig> {
     cfg.search.threshold = a.num("threshold", 6.0f32).map_err(e)?;
     cfg.search.max_width = a.num("max-width", 4096usize).map_err(e)?;
     cfg.gulp = a.num("gulp", 1usize << 16).map_err(e)?;
-    if a.get("subband").is_some() {
-        cfg.dedisperser = Dedisperser::Subband(a.num("subband", 32usize).map_err(e)?);
-    }
+    let nsub = a.num("subband", 64usize).map_err(e)?;
+    cfg.dedisperser = Dedisperser::parse(a.get("dedisp").unwrap_or(if a.get("subband").is_some() { "subband" } else { "auto" }), nsub)
+        .ok_or_else(|| FbError::Invalid("--dedisp auto|brute|subband|fdmt".into()))?;
     cfg.rfi.zero_dm = a.flag("zero-dm");
     cfg.rfi.iqrm = !a.flag("no-iqrm");
     cfg.rfi.sk = a.flag("sk");
@@ -52,7 +52,7 @@ fn config(a: &Args) -> Result<SinglePulseConfig> {
     Ok(cfg)
 }
 
-const VALUED: &[&str] = &["o", "dm", "dm-step", "dm-tol", "width-s", "threshold", "max-width", "gulp", "subband", "mask", "format", "interval", "iqrm-threshold", "presto"];
+const VALUED: &[&str] = &["o", "dm", "dm-step", "dm-tol", "width-s", "threshold", "max-width", "gulp", "subband", "mask", "format", "interval", "iqrm-threshold", "presto", "dedisp"];
 
 pub fn sp(raw: &[String]) -> Result<()> {
     let a = Args::parse(raw, VALUED).map_err(FbError::Invalid)?;

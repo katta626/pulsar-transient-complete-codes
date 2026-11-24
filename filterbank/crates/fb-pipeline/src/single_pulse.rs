@@ -5,8 +5,38 @@ use fb_sp::SearchParams;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dedisperser {
+    Auto,
     BruteForce,
     Subband(usize),
+    Fdmt,
+}
+
+impl Dedisperser {
+    pub fn parse(s: &str, nsub: usize) -> Option<Self> {
+        match s {
+            "auto" => Some(Dedisperser::Auto),
+            "brute" => Some(Dedisperser::BruteForce),
+            "subband" => Some(Dedisperser::Subband(nsub)),
+            "fdmt" => Some(Dedisperser::Fdmt),
+            _ => None,
+        }
+    }
+
+    pub fn resolve(self, nchan: usize) -> Self {
+        match self {
+            Dedisperser::Auto if nchan >= 256 => Dedisperser::Subband(((nchan as f64).sqrt() as usize).next_power_of_two().max(16)),
+            Dedisperser::Auto => Dedisperser::BruteForce,
+            d => d,
+        }
+    }
+
+    pub fn run(self, block: &Block, plan: &DmPlan, kill: Option<&[bool]>) -> Result<fb_dedisp::DedispOutput> {
+        match self.resolve(block.nchan()) {
+            Dedisperser::Subband(n) => fb_dedisp::subband(block, plan, n, kill),
+            Dedisperser::Fdmt => fb_dedisp::fdmt(block, plan, kill),
+            _ => fb_dedisp::brute_force(block, plan, kill),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -65,7 +95,7 @@ impl Default for SinglePulseConfig {
             gulp: 1 << 16,
             search: SearchParams::default(),
             rfi: RfiConfig::default(),
-            dedisperser: Dedisperser::BruteForce,
+            dedisperser: Dedisperser::Auto,
             external_mask: None,
         }
     }
@@ -139,10 +169,7 @@ pub fn run_single_pulse(reader: &mut dyn Reader, cfg: &SinglePulseConfig) -> Res
             break;
         }
         let kill = clean_block(&mut block, &cfg.rfi, &mut mask)?;
-        let out = match cfg.dedisperser {
-            Dedisperser::BruteForce => fb_dedisp::brute_force(&block, &plan, Some(&kill))?,
-            Dedisperser::Subband(n) => fb_dedisp::subband(&block, &plan, n, Some(&kill))?,
-        };
+        let out = cfg.dedisperser.run(&block, &plan, Some(&kill))?;
         let trials: Vec<Vec<f32>> = (0..out.ndm).map(|i| out.trial(i).to_vec()).collect();
         let events = fb_sp::search_trials(&trials, &cfg.search);
         let clusters = fb_sp::cluster(&events, &cfg.search, &ws);
