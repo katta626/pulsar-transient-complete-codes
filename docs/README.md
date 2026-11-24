@@ -23,6 +23,7 @@ Design: see `reference/06-our-plan.md` (the earlier `reports/unified-search-stac
 | `filterbank/crates/` | Rust: `fb-defs` (shared definitions), `fb-io` (PSRFITS/SIGPROC), `fb-formats` (PRESTO, heimdall, candidate files) |
 | `docs/reference/` | Reference set 00–06: overview, formats, PRESTO, DSPSR/PSRCHIVE/timing, other codes, math, our plan |
 | `docs/reports/`, `docs/research_notes/` | Earlier report and the source notes behind the reference set |
+| [`docs/CREDITS.md`](CREDITS.md), [`docs/math-maps/`](math-maps/README.md) | What our code took from where; one math map per source library |
 
 ## Roadmap
 
