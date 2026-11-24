@@ -23,6 +23,7 @@ test: all
 	$(PY) tests/test_psrfits_convert.py
 	$(PY) tests/test_periodic_cli.py
 	$(PY) tests/test_toa_cli.py
+	$(PY) tests/test_classify_realtime.py
 
 clean:
 	$(CARGO) clean
