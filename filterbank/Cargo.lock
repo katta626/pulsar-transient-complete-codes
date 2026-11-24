@@ -67,6 +67,7 @@ dependencies = [
  "fb-pipeline",
  "fb-rfi",
  "fb-sp",
+ "fb-timing",
  "serde_json",
 ]
 
@@ -161,6 +162,15 @@ version = "0.1.0"
 dependencies = [
  "fb-defs",
  "rayon",
+]
+
+[[package]]
+name = "fb-timing"
+version = "0.1.0"
+dependencies = [
+ "fb-defs",
+ "rustfft",
+ "serde",
 ]
 
 [[package]]

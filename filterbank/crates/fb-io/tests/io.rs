@@ -69,3 +69,28 @@ fn sigproc_round_trip() {
         assert_eq!(&b2.data[..], &vals[160..240]);
     }
 }
+
+#[test]
+fn dada_reader() {
+    use std::io::Write;
+    let dir = std::env::temp_dir().join(format!("fbdada_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("x.dada");
+    let mut hdr = String::from("HDR_VERSION 1.0\nHDR_SIZE 4096\nNCHAN 8\nNBIT 8\nNPOL 1\nNDIM 1\nTSAMP 64\nBW -16\nFREQ 1400\nUTC_START 2024-01-02-03:04:05\nOBS_OFFSET 0\nSOURCE TESTSRC\nTELESCOPE DAT\n");
+    hdr.push_str(&"\0".repeat(4096 - hdr.len()));
+    let data: Vec<u8> = (0..8 * 100).map(|i| (i % 251) as u8).collect();
+    let mut f = std::fs::File::create(&path).unwrap();
+    f.write_all(hdr.as_bytes()).unwrap();
+    f.write_all(&data).unwrap();
+    drop(f);
+    let mut r = open(&[&path]).unwrap();
+    let h = r.header();
+    assert_eq!(h.nsamples, 100);
+    assert_eq!(h.nchan(), 8);
+    assert_eq!(h.start.imjd, 60311);
+    assert!((h.start.sec - (3.0 * 3600.0 + 4.0 * 60.0 + 5.0)).abs() < 1e-9);
+    assert!((h.tsamp - 64e-6).abs() < 1e-15);
+    assert!((h.freqs.fch1() - 1407.0).abs() < 1e-9 && h.freqs.is_descending());
+    let b = r.read(0, 100).unwrap();
+    assert_eq!(b.data, data.iter().map(|v| *v as f32).collect::<Vec<_>>());
+}

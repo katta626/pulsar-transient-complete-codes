@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use fb_defs::{Block, FbError, ObsHeader, Result};
 
+use crate::dada::DadaReader;
 use crate::psrfits::{PsrfitsOptions, PsrfitsReader};
 use crate::sigproc::SigprocReader;
 
@@ -52,6 +53,7 @@ impl<R: Reader> Iterator for BlockIter<'_, R> {
 pub enum Format {
     Sigproc,
     Psrfits,
+    Dada,
 }
 
 pub fn detect(path: &Path) -> Result<Format> {
@@ -64,6 +66,10 @@ pub fn detect(path: &Path) -> Result<Format> {
     }
     if n >= 16 && &buf[4..16] == b"HEADER_START" {
         return Ok(Format::Sigproc);
+    }
+    let text = String::from_utf8_lossy(&buf[..n]).to_ascii_uppercase();
+    if text.starts_with("HDR_VERSION") || text.starts_with("HDR_SIZE") || path.extension().and_then(|e| e.to_str()) == Some("dada") {
+        return Ok(Format::Dada);
     }
     Err(FbError::Unsupported(format!("cannot tell the format of {}", path.display())))
 }
@@ -81,6 +87,12 @@ pub fn open_with<P: AsRef<Path>>(paths: &[P], opts: PsrfitsOptions) -> Result<Bo
                 return Err(FbError::Unsupported("multiple SIGPROC files: concatenate after reading each".into()));
             }
             Ok(Box::new(SigprocReader::open(first.as_ref())?))
+        }
+        Format::Dada => {
+            if paths.len() > 1 {
+                return Err(FbError::Unsupported("multiple DADA files: open them one at a time".into()));
+            }
+            Ok(Box::new(DadaReader::open(first.as_ref(), opts.sum_pols)?))
         }
     }
 }

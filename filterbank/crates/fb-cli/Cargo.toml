@@ -18,3 +18,4 @@ fb-sp.workspace = true
 fb-fft.workspace = true
 fb-ffa.workspace = true
 fb-fold.workspace = true
+fb-timing.workspace = true

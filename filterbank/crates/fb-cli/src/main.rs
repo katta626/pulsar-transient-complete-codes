@@ -2,6 +2,7 @@ mod args;
 mod convert;
 mod periodic;
 mod search;
+mod timing;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -18,6 +19,7 @@ commands:
   fft SERIES             FFT (+acceleration) search of one time series (.dat/.tim)
   ffa SERIES             fast folding algorithm search of one time series
   fold FILE              fold a series or filterbank at a given period
+  toa FOLD.json          TOAs per sub-integration by Fourier template matching -> .tim
 ";
 
 fn main() -> ExitCode {
@@ -40,6 +42,7 @@ fn main() -> ExitCode {
         "fft" => periodic::fft(rest),
         "ffa" => periodic::ffa(rest),
         "fold" => periodic::fold(rest),
+        "toa" => timing::toa(rest),
         "-h" | "--help" | "help" => {
             print!(
                 "{HELP}\nconvert:\n  {}\nsp:\n  {}\nrfi:\n  {}\nperiodic:\n  {}\nseries:\n  {}\n",

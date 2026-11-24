@@ -21,6 +21,8 @@ test: all
 	PYTHONPATH=python $(PY) tests/test_python_api.py
 	$(PY) tests/test_sp_cli.py
 	$(PY) tests/test_psrfits_convert.py
+	$(PY) tests/test_periodic_cli.py
+	$(PY) tests/test_toa_cli.py
 
 clean:
 	$(CARGO) clean

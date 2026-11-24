@@ -169,8 +169,10 @@ pub fn fold(raw: &[String]) -> Result<()> {
     let f = 1.0 / period;
     let fdot = -pdot / (period * period);
     let is_series = p.extension().and_then(|x| x.to_str()) == Some("dat") || p.extension().and_then(|x| x.to_str()) == Some("tim");
+    let duration;
     let (epoch, folded, chi): (Epoch, fb_fold::Folded, f64) = if is_series {
         let s = load_series(&p)?;
+        duration = s.len() as f64 * s.tsamp();
         let fp = fb_fold::FoldParams { f, fdot, fddot: 0.0, epoch: s.header.start, dm, nbins };
         let (_, sd) = s.mean_std();
         let fo = fb_fold::fold_series(&s, &fp, nsub);
@@ -179,6 +181,7 @@ pub fn fold(raw: &[String]) -> Result<()> {
     } else {
         let mut r = open_with(&[&p], PsrfitsOptions::default())?;
         let h = r.header();
+        duration = h.duration();
         let c = PeriodicCandidate {
             obs_id: h.observation_id(),
             f_hz: f,
@@ -200,7 +203,7 @@ pub fn fold(raw: &[String]) -> Result<()> {
     let out = a.get("o").map(PathBuf::from).unwrap_or_else(|| p.with_extension("fold.json"));
     let prof = fb_fold::normalised_profile(&folded);
     let mut w = BufWriter::new(File::create(&out)?);
-    let doc = json!({"period": period, "pdot": pdot, "dm": dm, "epoch_mjd": epoch.mjd(), "reduced_chi2": chi, "nbins": nbins,
+    let doc = json!({"period": period, "pdot": pdot, "dm": dm, "epoch_mjd": epoch.mjd(), "duration_s": duration, "reduced_chi2": chi, "nbins": nbins,
         "nsub": folded.nsub, "nchan": folded.nchan, "profile": prof, "data": folded.data, "counts": folded.counts});
     serde_json::to_writer(&mut w, &doc).map_err(|x| FbError::Format(x.to_string()))?;
     w.flush()?;
