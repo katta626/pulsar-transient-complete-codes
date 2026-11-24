@@ -14,6 +14,7 @@ The reository acts in two way;
 
 | Folder | Contents |
 |---|---|
-| `filterbank/` | Complete codes for pulsar and transient searches (formerly `psr-searchmode-to-filterbank`); the PSRFITS → filterbank converter now lives in `filterbank/converter/` |
+| `filterbank/` | Complete codes for pulsar and transient searches (formerly `psr-searchmode-to-filterbank`): code and build files only |
+| `docs/` | Everything explanatory for `filterbank/`: reference set, plan, research notes, credits, math maps |
 | `PULSAR-TUTORIAL/` | Pulsar data formats tutorial (submodule) |
 | `Intro-to-Interferometry/` | Interferometry tutorial (submodule) |
