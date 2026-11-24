@@ -32,12 +32,25 @@ To use the Python package from anywhere, either `pip install -e filterbank` or s
 | `fb rfi IN... -o mask.json [--presto out.mask]` | Build an RFI mask (IQRM, `--sk`, `--stats`, `--zero-dm`); can also write a PRESTO `.mask` |
 | `fb export-mask DATA MASK -o OUT` | Convert masks between JSON and PRESTO `.mask` for a given data file |
 | `fb sp IN... --dm 0:1000` | Single-pulse search: RFI → dedispersion (`--dedisp auto/brute/subband/fdmt`) → boxcar → clustering. Writes `.cands.csv` and `.singlepulse` (and `.cand` with `--format heimdall`) |
-| `fb periodic IN... --dm 0:100 [--accel 50] [--ffa]` | Periodicity search: RFI → batched dedispersion → FFT/acceleration and/or FFA → sifting → folding of the top candidates. Writes `.periodic.csv` and `.folds.json` |
+| `fb periodic IN... --dm 0:100 [--accel 50 \| --zmax 200 [--wmax 600]] [--ffa]` | Periodicity search: RFI → batched dedispersion → FFT search and/or FFA → sifting → folding of the top candidates. Writes `.periodic.csv` and `.folds.json` |
 | `fb fft SERIES` / `fb ffa SERIES` | Search one dedispersed series: a PRESTO `.dat/.inf` pair or a SIGPROC `.tim` |
 | `fb fold FILE --period P [--pdot] [--dm]` | Fold a series or a filterbank; writes the profile, sub-integrations and reduced χ² |
 | `fb toa FOLD.json [--template T.json] --site gmrt` | TOAs per sub-integration by Fourier template matching → tempo2 `.tim` |
 
 Every command accepts PSRFITS (one file or several, sorted by start time), SIGPROC `.fil` and PSRDADA `.dada`. The format is detected from each file's first bytes.
+
+## Acceleration and jerk searches
+
+There are two ways to search for binary pulsars. Both run under `fb periodic` and `fb fft`.
+
+- **`--accel MAX`** (m/s²): time-domain resampling, one FFT per acceleration trial. Cheap for small accelerations.
+- **`--zmax Z [--wmax W]`**: Fourier-domain search, like PRESTO `accelsearch`.
+  - `z` is the frequency drift in Fourier bins over the observation, and `w` is the drift of `z` (jerk).
+  - Step sizes are `--dz 2` and `--dw 20` by default.
+  - Like PRESTO, `zmax`/`wmax` apply to the highest harmonic summed.
+  - The top `--refine 50` candidates are then optimised in `(f, ḟ, f̈)` by interpolating the spectrum, and the CSV reports the optimised values (at mid-observation).
+  - Speed: 2²⁰ samples, 0.5–500 Hz, `zmax 200`, 16 harmonics takes about 5 s on an M1 Pro.
+  - A jerk search costs roughly `2·wmax/dw + 1` times more.
 
 ## Mixing with PRESTO and other tools
 

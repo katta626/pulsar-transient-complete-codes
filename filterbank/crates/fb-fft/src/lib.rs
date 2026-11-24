@@ -1,3 +1,4 @@
+pub mod fdas;
 pub mod stats;
 
 use fb_defs::{Epoch, PeriodicCandidate, Series, SPEED_OF_LIGHT};

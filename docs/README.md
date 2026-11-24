@@ -34,5 +34,5 @@ Design: see `reference/06-our-plan.md` (the earlier `reports/unified-search-stac
 2. CPU single-pulse pipeline (RFI, brute/subband/FDMT dedispersion, boxcar, clustering) — done.
 3. CUDA backend — first kernels written (dedispersion, zero-DM, boxcar); not yet compiled or tested on a GPU.
 4. Real-time Diamond Array pipeline — growing-file follower and classifier done; PSRDADA shared-memory ring buffer not yet.
-5. Periodicity search and folding (FFT/accel, FFA, sift, fold, TOAs) — done; jerk search and coherent harmonic search not yet.
+5. Periodicity search and folding (FFT, time-domain and Fourier-domain acceleration, jerk search with candidate optimisation, FFA, sift, fold, TOAs) — done.
 6. Vendoring of upstream engines (dmt, PRESTO accelsearch/coherentsearch, riptide core), benchmarks against the originals.

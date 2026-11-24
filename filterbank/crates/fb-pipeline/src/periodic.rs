@@ -1,4 +1,5 @@
 use fb_defs::{DmPlan, FbError, PeriodicCandidate, Result, RfiMask, Series};
+use fb_fft::fdas::FdasParams;
 use fb_fft::FftSearchParams;
 use fb_ffa::FfaParams;
 use fb_fold::{FoldParams, Folded};
@@ -19,6 +20,7 @@ pub struct PeriodicConfig {
     pub fft: Option<FftSearchParams>,
     pub max_accel: f64,
     pub accel_tol: f64,
+    pub fdas: Option<FdasParams>,
     pub ffa: Option<FfaParams>,
     pub birdies: Vec<(f64, f64)>,
     pub min_dm_hits: usize,
@@ -43,6 +45,7 @@ impl Default for PeriodicConfig {
             fft: Some(FftSearchParams::default()),
             max_accel: 0.0,
             accel_tol: 1.1,
+            fdas: None,
             ffa: None,
             birdies: vec![],
             min_dm_hits: 1,
@@ -149,7 +152,9 @@ pub fn dedisperse_all(reader: &mut dyn Reader, plan: &DmPlan, dm_idx: &[usize], 
 
 pub fn search_one(s: &Series, cfg: &PeriodicConfig) -> Vec<PeriodicCandidate> {
     let mut c = Vec::new();
-    if let Some(p) = &cfg.fft {
+    if let (Some(p), Some(fp)) = (&cfg.fft, &cfg.fdas) {
+        c.extend(fb_fft::fdas::search_series(s, &cfg.birdies, fp, p));
+    } else if let Some(p) = &cfg.fft {
         let t_obs = s.len() as f64 * s.tsamp();
         let trials = fb_fft::accel_trials(t_obs, s.tsamp(), cfg.max_accel, cfg.pulse_width, cfg.accel_tol);
         c.extend(fb_fft::search_series(s, &trials, &cfg.birdies, p));

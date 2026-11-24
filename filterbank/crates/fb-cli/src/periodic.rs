@@ -13,14 +13,14 @@ use serde_json::json;
 use crate::args::Args;
 
 pub const PERIODIC_USAGE: &str = "fb periodic INPUT... [-o PREFIX] [--dm LO:HI] [--dm-step S] [--fmin 0.1] [--fmax 2000]
-       [--harm 16] [--sigma 6] [--accel MAX] [--accel-tol 1.1] [--ffa] [--pmin 0.5] [--pmax 30]
+       [--harm 16] [--sigma 6] [--accel MAX] [--accel-tol 1.1] [--zmax Z] [--wmax W] [--dz 2] [--dw 20] [--refine 50] [--ffa] [--pmin 0.5] [--pmax 30]
        [--no-fft] [--fold N] [--nbins 64] [--dedisp auto|brute|subband|fdmt] [--min-dm-hits 1] [--zap FREQ:WIDTH,...] [--mask FILE] [--zero-dm]";
 
-pub const SERIES_USAGE: &str = "fb fft SERIES(.dat|.tim) [--fmin] [--fmax] [--harm] [--sigma] [--accel MAX] [-o OUT.csv]
+pub const SERIES_USAGE: &str = "fb fft SERIES(.dat|.tim) [--fmin] [--fmax] [--harm] [--sigma] [--accel MAX | --zmax Z [--wmax W]] [-o OUT.csv]
 fb ffa SERIES(.dat|.tim) [--pmin] [--pmax] [--snr 7] [-o OUT.csv]
 fb fold SERIES|FILTERBANK --period P [--pdot PD] [--dm DM] [--nbins 64] [-o OUT.json]";
 
-const VALUED: &[&str] = &["o", "dm", "dm-step", "fmin", "fmax", "harm", "sigma", "accel", "accel-tol", "pmin", "pmax", "fold", "nbins", "min-dm-hits", "zap", "mask", "snr", "period", "pdot", "nsub", "gulp", "dedisp", "subband"];
+const VALUED: &[&str] = &["o", "dm", "dm-step", "fmin", "fmax", "harm", "sigma", "accel", "accel-tol", "pmin", "pmax", "fold", "nbins", "min-dm-hits", "zap", "mask", "snr", "period", "pdot", "nsub", "gulp", "dedisp", "subband", "zmax", "wmax", "dz", "dw", "refine"];
 
 fn e(s: String) -> FbError {
     FbError::Invalid(s)
@@ -34,6 +34,19 @@ fn fft_params(a: &Args) -> Result<fb_fft::FftSearchParams> {
         sigma_threshold: a.num("sigma", 6.0).map_err(e)?,
         max_cands: 500,
     })
+}
+
+fn fdas_params(a: &Args) -> Result<Option<fb_fft::fdas::FdasParams>> {
+    if a.get("zmax").is_none() && a.get("wmax").is_none() {
+        return Ok(None);
+    }
+    Ok(Some(fb_fft::fdas::FdasParams {
+        zmax: a.num("zmax", 0.0).map_err(e)?,
+        dz: a.num("dz", 2.0).map_err(e)?,
+        wmax: a.num("wmax", 0.0).map_err(e)?,
+        dw: a.num("dw", 20.0).map_err(e)?,
+        refine: a.num("refine", 50usize).map_err(e)?,
+    }))
 }
 
 fn ffa_params(a: &Args) -> Result<fb_ffa::FfaParams> {
@@ -76,6 +89,7 @@ pub fn periodic(raw: &[String]) -> Result<()> {
     cfg.fft = if a.flag("no-fft") { None } else { Some(fft_params(&a)?) };
     cfg.max_accel = a.num("accel", 0.0).map_err(e)?;
     cfg.accel_tol = a.num("accel-tol", 1.1).map_err(e)?;
+    cfg.fdas = fdas_params(&a)?;
     cfg.ffa = if a.flag("ffa") { Some(ffa_params(&a)?) } else { None };
     cfg.fold_top = a.num("fold", 20usize).map_err(e)?;
     cfg.nbins = a.num("nbins", 64usize).map_err(e)?;
@@ -138,7 +152,10 @@ pub fn fft(raw: &[String]) -> Result<()> {
     let s = load_series(Path::new(p))?;
     let t_obs = s.len() as f64 * s.tsamp();
     let trials = fb_fft::accel_trials(t_obs, s.tsamp(), a.num("accel", 0.0).map_err(e)?, 1e-3, a.num("accel-tol", 1.1).map_err(e)?);
-    let c = fb_fft::search_series(&s, &trials, &birdies(&a)?, &fft_params(&a)?);
+    let c = match fdas_params(&a)? {
+        Some(fp) => fb_fft::fdas::search_series(&s, &birdies(&a)?, &fp, &fft_params(&a)?),
+        None => fb_fft::search_series(&s, &trials, &birdies(&a)?, &fft_params(&a)?),
+    };
     let sifted = fb_fft::sift(&c, t_obs, 1, 16);
     let out = a.get("o").map(PathBuf::from).unwrap_or_else(|| Path::new(p).with_extension("fft.csv"));
     write_csv_periodic(&out, &sifted)?;
