@@ -1,5 +1,7 @@
 # filterbank docs — pulsar and transient search codes
 
+**Start here:** [usage.md](usage.md) — build, every `fb` command, the Python API, PRESTO interoperability, CUDA.
+
 Complete codebase for pulsar and transient searches: data conversion,
 RFI mitigation, dedispersion, single-pulse and periodicity searches,
 folding, candidate classification and timing.
@@ -27,10 +29,10 @@ Design: see `reference/06-our-plan.md` (the earlier `reports/unified-search-stac
 
 ## Roadmap
 
-0. Restructure the repo, keep converter output byte-identical (done).
-1. Shared definitions and Rust I/O.
-2. CPU single-pulse pipeline.
-3. CUDA backend.
-4. Real-time Diamond Array pipeline.
-5. Periodicity search and folding.
-6. Release hardening.
+0. Restructure the repo, keep converter output byte-identical — done.
+1. Shared definitions and Rust I/O (PSRFITS, SIGPROC, DADA, PRESTO formats) — done.
+2. CPU single-pulse pipeline (RFI, brute/subband/FDMT dedispersion, boxcar, clustering) — done.
+3. CUDA backend — first kernels written (dedispersion, zero-DM, boxcar); not yet compiled or tested on a GPU.
+4. Real-time Diamond Array pipeline — growing-file follower and classifier done; PSRDADA shared-memory ring buffer not yet.
+5. Periodicity search and folding (FFT/accel, FFA, sift, fold, TOAs) — done; jerk search and coherent harmonic search not yet.
+6. Vendoring of upstream engines (dmt, PRESTO accelsearch/coherentsearch, riptide core), benchmarks against the originals.
