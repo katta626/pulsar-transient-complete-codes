@@ -1,5 +1,6 @@
 mod args;
 mod convert;
+mod search;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -9,6 +10,9 @@ const HELP: &str = "fb — pulsar and transient search toolkit
 commands:
   header FILE            print the canonical header (JSON) and any data gaps
   convert ...            PSRFITS/filterbank -> SIGPROC filterbank
+  rfi ...                build an RFI mask (JSON, optional PRESTO .mask)
+  sp ...                 single-pulse search: RFI -> dedisperse -> boxcar -> cluster
+  export-mask ...        convert masks between JSON and PRESTO .mask
 ";
 
 fn main() -> ExitCode {
@@ -24,8 +28,11 @@ fn main() -> ExitCode {
             None => Err(fb_defs::FbError::Invalid("usage: fb header FILE".into())),
         },
         "convert" => convert::run(rest),
+        "sp" => search::sp(rest),
+        "rfi" => search::rfi(rest),
+        "export-mask" => search::export_mask(rest),
         "-h" | "--help" | "help" => {
-            print!("{HELP}\nconvert usage:\n  {}\n", convert::USAGE);
+            print!("{HELP}\nconvert:\n  {}\nsp:\n  {}\nrfi:\n  {}\n", convert::USAGE, search::SP_USAGE, search::RFI_USAGE);
             Ok(())
         }
         other => Err(fb_defs::FbError::Invalid(format!("unknown command '{other}'\n{HELP}"))),
