@@ -15,3 +15,6 @@ serde_json.workspace = true
 fb-rfi.workspace = true
 fb-pipeline.workspace = true
 fb-sp.workspace = true
+fb-fft.workspace = true
+fb-ffa.workspace = true
+fb-fold.workspace = true

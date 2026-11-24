@@ -1,0 +1,10 @@
+[package]
+name = "fb-fft"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fb-defs.workspace = true
+rayon.workspace = true
+realfft.workspace = true
+rustfft.workspace = true

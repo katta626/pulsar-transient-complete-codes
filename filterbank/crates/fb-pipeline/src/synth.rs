@@ -17,7 +17,7 @@ pub struct Injection {
     pub amplitude: f32,
 }
 
-pub struct Lcg(u64);
+pub struct Lcg(pub u64);
 
 impl Lcg {
     pub fn next_f32(&mut self) -> f32 {

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-pipeline", "crates/fb-capi", "crates/fb-cli"]
-default-members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-pipeline", "crates/fb-capi", "crates/fb-cli"]
+members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-fft", "crates/fb-ffa", "crates/fb-fold", "crates/fb-pipeline", "crates/fb-capi", "crates/fb-cli"]
+default-members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-fft", "crates/fb-ffa", "crates/fb-fold", "crates/fb-pipeline", "crates/fb-capi", "crates/fb-cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -15,6 +15,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 memmap2 = "0.9"
 rayon = "1.10"
+rustfft = "6"
+realfft = "3"
+fb-fft = { path = "crates/fb-fft" }
+fb-ffa = { path = "crates/fb-ffa" }
+fb-fold = { path = "crates/fb-fold" }
 fb-rfi = { path = "crates/fb-rfi" }
 fb-dedisp = { path = "crates/fb-dedisp" }
 fb-sp = { path = "crates/fb-sp" }

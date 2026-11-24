@@ -10,3 +10,6 @@ fb-rfi.workspace = true
 fb-dedisp.workspace = true
 fb-sp.workspace = true
 rayon.workspace = true
+fb-fft.workspace = true
+fb-ffa.workspace = true
+fb-fold.workspace = true
