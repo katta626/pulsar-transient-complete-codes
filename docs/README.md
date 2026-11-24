@@ -33,6 +33,6 @@ Design: see `reference/06-our-plan.md` (the earlier `reports/unified-search-stac
 1. Shared definitions and Rust I/O (PSRFITS, SIGPROC, DADA, PRESTO formats) — done.
 2. CPU single-pulse pipeline (RFI, brute/subband/FDMT dedispersion, boxcar, clustering) — done.
 3. CUDA backend — first kernels written (dedispersion, zero-DM, boxcar); not yet compiled or tested on a GPU.
-4. Real-time Diamond Array pipeline — growing-file follower and classifier done; PSRDADA shared-memory ring buffer not yet.
+4. Real-time Diamond Array pipeline — growing-file follower, PSRDADA shared-memory ring reader/writer and classifier done.
 5. Periodicity search and folding (FFT, time-domain and Fourier-domain acceleration, jerk search with candidate optimisation, FFA, sift, fold, TOAs) — done.
 6. Vendoring of upstream engines (dmt, PRESTO accelsearch/coherentsearch, riptide core), benchmarks against the originals.

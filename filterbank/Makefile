@@ -2,12 +2,15 @@ CARGO ?= cargo
 NVCC ?= $(shell command -v nvcc 2>/dev/null)
 PY ?= python3
 
-.PHONY: all rust cuda test clean
+.PHONY: all rust dada cuda test clean
 
-all: rust cuda
+all: rust dada cuda
 
 rust:
 	$(CARGO) build --release
+
+dada:
+	$(MAKE) -C dada
 
 cuda:
 ifneq ($(NVCC),)
@@ -24,7 +27,9 @@ test: all
 	$(PY) tests/test_periodic_cli.py
 	$(PY) tests/test_toa_cli.py
 	$(PY) tests/test_classify_realtime.py
+	$(PY) tests/test_ring.py
 
 clean:
 	$(CARGO) clean
+	-$(MAKE) -C dada clean
 	-$(MAKE) -C cuda clean

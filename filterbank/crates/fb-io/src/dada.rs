@@ -47,26 +47,42 @@ pub fn utc_to_epoch(s: &str) -> Option<Epoch> {
     Some(Epoch::new(civil_to_mjd(y, mo, d), hh * 3600.0 + mi * 60.0 + ss))
 }
 
-pub struct DadaReader {
-    mmap: Mmap,
-    hdr_size: usize,
-    pub keys: HashMap<String, String>,
-    header: Arc<ObsHeader>,
-    nbits: u32,
-    order: BitOrder,
-    npol_raw: usize,
-    sum_pols: bool,
+pub struct DadaLayout {
+    pub header: ObsHeader,
+    pub nbits: u32,
+    pub order: BitOrder,
+    pub npol_raw: usize,
 }
 
-impl DadaReader {
-    pub fn open(path: &Path, sum_pols: bool) -> Result<Self> {
-        let f = File::open(path)?;
-        let mmap = unsafe { Mmap::map(&f)? };
-        let probe = String::from_utf8_lossy(&mmap[..mmap.len().min(65536)]).to_string();
-        let first = parse_header(&probe);
-        let hdr_size: usize = first.get("HDR_SIZE").and_then(|v| v.parse().ok()).unwrap_or(4096);
-        let text = String::from_utf8_lossy(&mmap[..hdr_size.min(mmap.len())]).trim_end_matches('\0').to_string();
-        let k = parse_header(&text);
+impl DadaLayout {
+    pub fn bytes_per_sample(&self) -> usize {
+        self.header.nchan() * self.npol_raw * self.nbits as usize / 8
+    }
+
+    pub fn decode(&self, bytes: &[u8], sum_pols: bool) -> Vec<f32> {
+        let nchan = self.header.nchan();
+        let raw_w = nchan * self.npol_raw;
+        let n = bytes.len() / self.bytes_per_sample().max(1);
+        let mut vals = Vec::with_capacity(n * raw_w);
+        unpack_into(&bytes[..n * self.bytes_per_sample()], self.nbits, self.order, false, &mut vals);
+        vals.truncate(n * raw_w);
+        if sum_pols && self.npol_raw > 1 {
+            let mut out = vec![0f32; n * nchan];
+            for t in 0..n {
+                for p in 0..self.npol_raw.min(2) {
+                    let src = &vals[(t * self.npol_raw + p) * nchan..(t * self.npol_raw + p + 1) * nchan];
+                    for (o, v) in out[t * nchan..(t + 1) * nchan].iter_mut().zip(src) {
+                        *o += v;
+                    }
+                }
+            }
+            return out;
+        }
+        vals
+    }
+}
+
+pub fn layout(k: &HashMap<String, String>, sum_pols: bool, data_bytes: usize, label: &str) -> Result<DadaLayout> {
         let get = |name: &str| k.get(name).cloned();
         let num = |name: &str| get(name).and_then(|v| v.parse::<f64>().ok());
         let ndim = num("NDIM").unwrap_or(1.0) as usize;
@@ -85,7 +101,6 @@ impl DadaReader {
         let obs_offset = num("OBS_OFFSET").unwrap_or(0.0) as u64;
         let utc = get("UTC_START").and_then(|s| utc_to_epoch(&s)).ok_or_else(|| FbError::Format("DADA header has no usable UTC_START".into()))?;
         let start = utc.add_seconds((obs_offset / bytes_per_samp.max(1) as u64) as f64 * tsamp);
-        let data_bytes = mmap.len().saturating_sub(hdr_size);
         let nsamples = (data_bytes / bytes_per_samp.max(1)) as u64;
         let order = match get("BIT_ORDER").map(|s| s.to_ascii_uppercase()) {
             Some(s) if s.starts_with("MSB") => BitOrder::MsbFirst,
@@ -111,9 +126,33 @@ impl DadaReader {
             beam: num("BEAM").or_else(|| num("IBEAM")).unwrap_or(0.0) as u32,
             nbeams: num("NBEAM").unwrap_or(1.0) as u32,
             order: DataOrder::TimePolFreq,
-            provenance: vec![format!("dada:{}", path.file_name().and_then(|s| s.to_str()).unwrap_or(""))],
+            provenance: vec![format!("dada:{label}")],
         };
-        Ok(Self { mmap, hdr_size, keys: k, header: Arc::new(header), nbits, order, npol_raw, sum_pols })
+        Ok(DadaLayout { header, nbits, order, npol_raw })
+}
+
+pub struct DadaReader {
+    mmap: Mmap,
+    hdr_size: usize,
+    pub keys: HashMap<String, String>,
+    header: Arc<ObsHeader>,
+    lay: DadaLayout,
+    sum_pols: bool,
+}
+
+impl DadaReader {
+    pub fn open(path: &Path, sum_pols: bool) -> Result<Self> {
+        let f = File::open(path)?;
+        let mmap = unsafe { Mmap::map(&f)? };
+        let probe = String::from_utf8_lossy(&mmap[..mmap.len().min(65536)]).to_string();
+        let first = parse_header(&probe);
+        let hdr_size: usize = first.get("HDR_SIZE").and_then(|v| v.parse().ok()).unwrap_or(4096);
+        let text = String::from_utf8_lossy(&mmap[..hdr_size.min(mmap.len())]).trim_end_matches('\0').to_string();
+        let k = parse_header(&text);
+        let data_bytes = mmap.len().saturating_sub(hdr_size);
+        let label = path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let lay = layout(&k, sum_pols, data_bytes, &label)?;
+        Ok(Self { mmap, hdr_size, keys: k, header: Arc::new(lay.header.clone()), lay, sum_pols })
     }
 }
 
@@ -126,24 +165,9 @@ impl Reader for DadaReader {
         let h = self.header.clone();
         let end = (start + nsamp as u64).min(h.nsamples);
         let n = end.saturating_sub(start) as usize;
-        let nchan = h.nchan();
-        let raw_w = nchan * self.npol_raw;
-        let bps = raw_w * self.nbits as usize / 8;
+        let bps = self.lay.bytes_per_sample();
         let b0 = self.hdr_size + start as usize * bps;
-        let mut vals = Vec::with_capacity(n * raw_w);
-        unpack_into(&self.mmap[b0..b0 + n * bps], self.nbits, self.order, false, &mut vals);
-        vals.truncate(n * raw_w);
-        if self.sum_pols && self.npol_raw > 1 {
-            let mut out = vec![0f32; n * nchan];
-            for t in 0..n {
-                for p in 0..self.npol_raw.min(2) {
-                    for c in 0..nchan {
-                        out[t * nchan + c] += vals[(t * self.npol_raw + p) * nchan + c];
-                    }
-                }
-            }
-            return Block::new(h, start, n, out);
-        }
+        let vals = self.lay.decode(&self.mmap[b0..b0 + n * bps], self.sum_pols);
         Block::new(h, start, n, vals)
     }
 }

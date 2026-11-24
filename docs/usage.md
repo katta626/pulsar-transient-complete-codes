@@ -19,7 +19,7 @@ cd filterbank && make test
 - `target/release/fb`, the command-line tool;
 - `target/release/libfbcore.{dylib,so}`, the shared library used by Python and by C/C++/CUDA through `include/fbcore.h`.
 
-If `nvcc` is found, it also builds `cuda/build/libfbcuda.so`.
+It also builds `dada/build/libfbdada.{dylib,so}`, the PSRDADA ring-buffer client. It is plain C from the vendored psrdada sources and needs no psrdada install. If `nvcc` is found, it also builds `cuda/build/libfbcuda.so`.
 
 To use the Python package from anywhere, either `pip install -e filterbank` or set `PYTHONPATH=filterbank/python`.
 
@@ -38,6 +38,22 @@ To use the Python package from anywhere, either `pip install -e filterbank` or s
 | `fb toa FOLD.json [--template T.json] --site gmrt` | TOAs per sub-integration by Fourier template matching → tempo2 `.tim` |
 
 Every command accepts PSRFITS (one file or several, sorted by start time), SIGPROC `.fil` and PSRDADA `.dada`. The format is detected from each file's first bytes.
+
+## Choosing a dedisperser
+
+`--dedisp` (CLI) or `method=` (Python):
+
+- **`brute`:** exact. Best for small channel counts.
+- **`subband`:** two-stage. Fast, with a small extra smearing.
+- **`fdmt`:** the tree algorithm. Its cost depends on the largest DM delay, not on the number of DM trials, so it wins for fine DM grids.
+- **`auto`:** uses subband at 256 channels or more, brute force otherwise.
+
+Timings on an M1 Pro:
+
+| Data | brute | subband | fdmt |
+|---|---|---|---|
+| 4096 channels, 1001 DMs, 2.1 s of data | 4.4 s | 0.45 s | 0.47 s |
+| 256 channels, 1001 DMs (0–500), 8.4 s of data | 0.24 s | — | 0.07 s |
 
 ## Acceleration and jerk searches
 
@@ -86,6 +102,12 @@ scored = fb.classify.classify("obs.fil", res["candidates"], save_dir="cuts")  # 
 
 - **Classifier:** `fb.classify.classify(..., model="fetch_like.onnx")` uses an ONNX model if `onnxruntime` is installed. Without one it uses the built-in physical score: broadband fraction, zero-DM ratio and the shape of S/N against DM.
 - **Live data:** `fb.realtime.run_live("growing.fil", gulp=65536, dm_hi=2000)` follows a file while the backend is still writing it. `fb.realtime.watch_directory(...)` yields new files as they appear.
+- **PSRDADA ring buffers:** `fb.realtime.run_live_ring("dada", gulp=65536, dm_hi=2000)` attaches to a running ring (hex key, as for `dada_db -k dada`) as a reader. It parses the ring's ASCII header like a `.dada` file and searches each gulp as it arrives, until end of data.
+  - `fb.ring.follow(key, gulp, overlap)` yields `(start_sample, block)` for your own processing.
+  - `fb.ring.create/destroy` make and remove a ring.
+  - `fb.ring.play("obs.dada", key)` replays a file into a ring, for testing a live setup offline.
+  - It works alongside the real psrdada tools (`dada_db`, `dada_dbdisk`, ...), since it is the same code.
+  - On macOS the default System V limits are small (4 MB, 8 segments per process), so use a small ring there.
 - **Backends:** `fb.backend.available()` returns `['cpu']` or `['cpu', 'cuda']`.
 
 ## CUDA

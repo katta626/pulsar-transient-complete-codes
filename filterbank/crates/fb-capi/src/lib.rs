@@ -459,3 +459,27 @@ pub extern "C" fn fb_run_sp(paths_json: *const c_char, cfg_json: *const c_char) 
         jstr(&json!({"plan": r.plan, "mask": r.mask, "candidates": r.candidates}))
     })
 }
+
+#[no_mangle]
+pub extern "C" fn fb_dada_layout(text: *const c_char, sum_pols: i32) -> *mut c_char {
+    guard_ptr!({
+        let k = fb_io::dada::parse_header(cstr(text)?);
+        let l = fb_io::dada::layout(&k, sum_pols != 0, 0, "ring")?;
+        jstr(&json!({"header": l.header, "nbits": l.nbits, "npol_raw": l.npol_raw, "bytes_per_sample": l.bytes_per_sample()}))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn fb_dada_decode(text: *const c_char, sum_pols: i32, bytes: *const u8, nbytes: u64, out: *mut f32, cap: u64) -> i64 {
+    guard_i64!({
+        let k = fb_io::dada::parse_header(cstr(text)?);
+        let l = fb_io::dada::layout(&k, sum_pols != 0, 0, "ring")?;
+        let raw = unsafe { std::slice::from_raw_parts(bytes, nbytes as usize) };
+        let v = l.decode(raw, sum_pols != 0);
+        if v.len() as u64 > cap {
+            return Err(FbError::Invalid(format!("buffer holds {cap} values, need {}", v.len())));
+        }
+        unsafe { std::ptr::copy_nonoverlapping(v.as_ptr(), out, v.len()) };
+        Ok((nbytes as usize / l.bytes_per_sample().max(1)) as i64)
+    })
+}

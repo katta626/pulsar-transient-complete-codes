@@ -87,3 +87,19 @@ def run_live(path, gulp=65536, poll=0.5, idle_timeout=30.0, **kw):
     for start, block in follow(path, gulp=gulp, overlap=searcher.maxd, poll=poll, idle_timeout=idle_timeout):
         allc.extend(searcher.process(start, block))
     return allc
+
+
+
+def run_live_ring(key, gulp=65536, sum_pols=True, **kw):
+    from . import ring
+
+    state = {}
+
+    def start(header):
+        state["s"] = Searcher(header, **kw)
+        return state["s"].maxd
+
+    allc = []
+    for pos, block in ring.follow(key, gulp=gulp, sum_pols=sum_pols, on_header=start):
+        allc.extend(state["s"].process(pos, block))
+    return allc

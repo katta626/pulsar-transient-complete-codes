@@ -3,75 +3,111 @@ use rayon::prelude::*;
 
 use crate::{check, DedispOutput};
 
-struct Band {
-    ndt: usize,
-    data: Vec<f32>,
-}
-
 fn dt_for(max_dt: usize, f_lo: f64, f_hi: f64, f_min: f64, f_max: f64) -> usize {
     (((max_dt as f64 - 1.0) * (f_lo.powi(-2) - f_hi.powi(-2)) / (f_min.powi(-2) - f_max.powi(-2))).ceil().max(0.0)) as usize
 }
 
-pub fn transform(image: &[f32], nf: usize, nt: usize, f_min: f64, f_max: f64, max_dt: usize) -> Vec<f32> {
-    let df = (f_max - f_min) / nf as f64;
-    let dt0 = dt_for(max_dt, f_min, f_min + df, f_min, f_max);
-    let mut bands: Vec<Band> = (0..nf)
-        .into_par_iter()
-        .map(|c| {
-            let row = &image[c * nt..(c + 1) * nt];
-            let ndt = dt0 + 1;
-            let mut data = vec![0f32; ndt * nt];
-            data[..nt].copy_from_slice(row);
-            for k in 1..ndt {
-                let (prev, cur) = data.split_at_mut(k * nt);
-                let prev = &prev[(k - 1) * nt..];
-                for t in k..nt {
-                    cur[t] = prev[t] + row[t - k];
-                }
+struct Row {
+    lo: usize,
+    hi: usize,
+    shift: usize,
+}
+
+struct Level {
+    rows: Vec<Row>,
+}
+
+pub struct FdmtPlan {
+    nf: usize,
+    dt0: usize,
+    levels: Vec<Level>,
+    max_rows: usize,
+}
+
+impl FdmtPlan {
+    pub fn new(nf: usize, f_min: f64, f_max: f64, max_dt: usize) -> Self {
+        let df = (f_max - f_min) / nf as f64;
+        let dt0 = dt_for(max_dt, f_min, f_min + df, f_min, f_max);
+        let mut ndts: Vec<usize> = vec![dt0 + 1; nf];
+        let mut max_rows = nf * (dt0 + 1);
+        let mut levels = Vec::new();
+        let nlev = nf.trailing_zeros() as usize;
+        for it in 1..=nlev {
+            let nb = ndts.len() / 2;
+            let width = (f_max - f_min) / nb as f64;
+            let correction = if it > 1 { df / 2.0 } else { 0.0 };
+            let mut prev_off = vec![0usize; ndts.len()];
+            for i in 1..ndts.len() {
+                prev_off[i] = prev_off[i - 1] + ndts[i - 1];
             }
-            Band { ndt, data }
-        })
-        .collect();
-    let levels = nf.trailing_zeros() as usize;
-    for it in 1..=levels {
-        let nb = bands.len() / 2;
-        let width = (f_max - f_min) / nb as f64;
-        let correction = if it > 1 { df / 2.0 } else { 0.0 };
-        let next: Vec<Band> = (0..nb)
-            .into_par_iter()
-            .map(|b| {
-                let lo = &bands[2 * b];
-                let hi = &bands[2 * b + 1];
+            let mut rows = Vec::new();
+            let mut new_ndts = Vec::with_capacity(nb);
+            for b in 0..nb {
                 let f_start = f_min + width * b as f64;
                 let f_end = f_start + width;
-                let f_mid = (f_end - f_start) / 2.0 + f_start - correction;
-                let f_mid_l = (f_end - f_start) / 2.0 + f_start + correction;
-                let local = dt_for(max_dt, f_start, f_end, f_min, f_max);
-                let ndt = local + 1;
-                let mut data = vec![0f32; ndt * nt];
+                let f_mid = width / 2.0 + f_start - correction;
+                let f_mid_l = width / 2.0 + f_start + correction;
+                let ndt = dt_for(max_dt, f_start, f_end, f_min, f_max) + 1;
+                let ndt = if it == nlev { ndt.min(max_dt.max(1)) } else { ndt };
                 let span = f_end.powi(-2) - f_start.powi(-2);
                 for idt in 0..ndt {
                     let dt_mid = ((idt as f64) * (f_mid.powi(-2) - f_start.powi(-2)) / span).round() as usize;
                     let dt_mid_l = ((idt as f64) * (f_mid_l.powi(-2) - f_start.powi(-2)) / span).round() as usize;
                     let dt_rest = idt.saturating_sub(dt_mid_l);
-                    let a = &lo.data[dt_mid.min(lo.ndt - 1) * nt..(dt_mid.min(lo.ndt - 1) + 1) * nt];
-                    let bh = &hi.data[dt_rest.min(hi.ndt - 1) * nt..(dt_rest.min(hi.ndt - 1) + 1) * nt];
-                    let out = &mut data[idt * nt..(idt + 1) * nt];
-                    let split = dt_mid_l.min(nt);
-                    out[..split].copy_from_slice(&a[..split]);
-                    for t in split..nt {
-                        out[t] = a[t] + bh[t - dt_mid_l];
-                    }
+                    rows.push(Row {
+                        lo: prev_off[2 * b] + dt_mid.min(ndts[2 * b] - 1),
+                        hi: prev_off[2 * b + 1] + dt_rest.min(ndts[2 * b + 1] - 1),
+                        shift: dt_mid_l,
+                    });
                 }
-                Band { ndt, data }
-            })
-            .collect();
-        bands = next;
+                new_ndts.push(ndt);
+            }
+            max_rows = max_rows.max(rows.len());
+            levels.push(Level { rows });
+            ndts = new_ndts;
+        }
+        Self { nf, dt0, levels, max_rows }
     }
-    let b = bands.pop().unwrap();
-    let mut out = b.data;
-    out.truncate(max_dt.min(b.ndt) * nt);
-    out
+
+    pub fn ndt(&self) -> usize {
+        self.levels.last().map(|l| l.rows.len()).unwrap_or(self.dt0 + 1)
+    }
+
+    pub fn execute(&self, image: &[f32], nt: usize) -> Vec<f32> {
+        let mut a = vec![0f32; self.max_rows * nt];
+        let mut b = vec![0f32; self.max_rows * nt];
+        let ndt0 = self.dt0 + 1;
+        a[..self.nf * ndt0 * nt].par_chunks_mut(ndt0 * nt).enumerate().for_each(|(c, band)| {
+            let row = &image[c * nt..(c + 1) * nt];
+            band[..nt].copy_from_slice(row);
+            for k in 1..ndt0 {
+                let (prev, cur) = band.split_at_mut(k * nt);
+                let prev = &prev[(k - 1) * nt..];
+                for t in k..nt {
+                    cur[t] = prev[t] + row[t - k];
+                }
+            }
+        });
+        for lev in &self.levels {
+            let src = &a;
+            b[..lev.rows.len() * nt].par_chunks_mut(nt).zip(lev.rows.par_iter()).for_each(|(out, r)| {
+                let x = &src[r.lo * nt..(r.lo + 1) * nt];
+                let y = &src[r.hi * nt..(r.hi + 1) * nt];
+                let split = r.shift.min(nt);
+                out[..split].copy_from_slice(&x[..split]);
+                for ((o, p), q) in out[split..].iter_mut().zip(&x[split..]).zip(&y[..nt - split]) {
+                    *o = p + q;
+                }
+            });
+            std::mem::swap(&mut a, &mut b);
+        }
+        a.truncate(self.ndt() * nt);
+        a
+    }
+}
+
+pub fn transform(image: &[f32], nf: usize, nt: usize, f_min: f64, f_max: f64, max_dt: usize) -> Vec<f32> {
+    FdmtPlan::new(nf, f_min, f_max, max_dt).execute(image, nt)
 }
 
 pub fn fdmt(block: &Block, plan: &DmPlan, killmask: Option<&[bool]>) -> Result<DedispOutput> {
