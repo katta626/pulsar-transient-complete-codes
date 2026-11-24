@@ -1,0 +1,14 @@
+[package]
+name = "fb-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "fb"
+path = "src/main.rs"
+
+[dependencies]
+fb-defs.workspace = true
+fb-io.workspace = true
+fb-formats.workspace = true
+serde_json.workspace = true
