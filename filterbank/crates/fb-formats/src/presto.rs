@@ -310,7 +310,16 @@ impl PrestoMask {
     }
 
     pub fn to_mask_for(&self, h: &ObsHeader) -> RfiMask {
-        self.to_mask_with_start(&h.observation_id(), Some((h.start, h.tsamp)))
+        let mut m = self.to_mask_with_start(&h.observation_id(), Some((h.start, h.tsamp)));
+        if h.nchan() == m.nchan() && h.freqs.is_descending() {
+            let n = m.nchan();
+            m.chan_lo.reverse();
+            m.chan_hi.reverse();
+            for row in m.bad.chunks_mut(n) {
+                row.reverse();
+            }
+        }
+        m
     }
 
     fn to_mask_with_start(&self, obs_id: &str, exact: Option<(Epoch, f64)>) -> RfiMask {

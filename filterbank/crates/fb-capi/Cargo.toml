@@ -1,0 +1,19 @@
+[package]
+name = "fb-capi"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "fbcore"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fb-defs.workspace = true
+fb-io.workspace = true
+fb-formats.workspace = true
+fb-rfi.workspace = true
+fb-dedisp.workspace = true
+fb-sp.workspace = true
+fb-pipeline.workspace = true
+serde_json.workspace = true
+serde.workspace = true

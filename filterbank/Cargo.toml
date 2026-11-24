@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-pipeline", "crates/fb-cli"]
-default-members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-pipeline", "crates/fb-cli"]
+members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-pipeline", "crates/fb-capi", "crates/fb-cli"]
+default-members = ["crates/fb-defs", "crates/fb-io", "crates/fb-formats", "crates/fb-rfi", "crates/fb-dedisp", "crates/fb-sp", "crates/fb-pipeline", "crates/fb-capi", "crates/fb-cli"]
 
 [workspace.package]
 version = "0.1.0"
