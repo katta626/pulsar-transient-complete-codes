@@ -1,6 +1,6 @@
 # Linux systems on this Mac
 
-Every Linux system runs from the terminal with `lx`. You never need to open the Docker window. The engine behind it is still Docker Desktop's, so Docker must stay installed; `lx` starts it hidden when needed.
+Every Linux system runs from the terminal with `lx`. You never need to open the Docker window. The engine behind it is still Docker Desktop's, so Docker must stay installed; `lx` asks it to start in the background when needed. If a window appears, turn off opening the Dashboard at startup in Docker's settings.
 
 ## Set up (once)
 
@@ -59,7 +59,6 @@ All images and containers are inside one file, `~/Library/Containers/com.docker.
 | `my-running-container` | `cuda` | has `/astroflow` sources (75 MB of changes) |
 | `gracious_villani` | `ubuntu` | 684 MB of installed packages and an ssh folder |
 | `pulsarx_container` | `pulsarx` | mounts `~/sinimg` as `/data`, has shell history |
-| `musing_austin`, `interesting_mendel`, `elastic_shaw`, `nervous_shaw`, `youthful_thompson` | various | nothing of note; a few KB each |
 
 `fits2fil` contains all of `pulsarx`, but the layers are shared, so it costs little extra disk.
 
