@@ -124,6 +124,7 @@ cd filterbank && make cuda
 - With `method="fdmt"` it runs FDMT on the GPU instead. It executes the same schedule that the Rust code builds.
 - Zero-DM and boxcar kernels are also available, as `fb.cuda.zero_dm` and `fb.cuda.boxcar_snr`.
 - `fb.cuda.fft_search(series, tsamp, f_min, f_max, max_harm, sigma)` runs a batched FFT periodicity search over many dedispersed series at once (cuFFT, dereddening, interbinning, harmonic sums). It returns one candidate list per series.
+- The library compiles with `nvcc` 12.0 (in the [docker](../docker/README.md) `cuda` system). It has not been run on a GPU.
 - **Without a GPU:** `tests/test_cuda_emu.py` compiles `fbcuda.cu` against small stand-in CUDA headers and runs the kernels on CPU threads. It compares each one with the CPU code, so kernel logic can be checked on a Mac. It is slow, about 30 s for the tests, and is for correctness only.
 
 ## Benchmarks
