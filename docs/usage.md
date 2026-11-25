@@ -150,31 +150,41 @@ On an M1 Pro, CPU only (512 channels, 33.5 s of data, DM 0–600):
 
 ## Compared with PRESTO
 
-Synthetic data, PRESTO 2017 build (`mpifrpsr/presto` Docker image), same input files for both. It runs under amd64 emulation on a Mac, so timings are not comparable and are left out.
+Synthetic data, same input files for both. PRESTO 6.3.3 (commit `7f66332`, gcc -mcpu=native, OpenMP) in an arm64 Linux container on an M1 Pro (6 fast + 2 slow cores); `fb` runs directly on macOS, so the container's overhead counts against PRESTO. Times are wall-clock, best of 3 (two runs for `single_pulse_search.py`, one for the `nsub 32` run). FFTW planning is excluded for PRESTO: without saved plans it takes about 54 s here, because FFTW lacks a fine timer in this ARM build.
 
-Single pulse (burst at DM 350, 10 s; matched boxcar S/N on PRESTO's own series is 53.6):
+| Step | PRESTO 1 thread | PRESTO 8 threads | fb 1 thread | fb 8 threads |
+|---|---|---|---|---|
+| FFT search, no acceleration, 8 harmonics | 0.01 s | 0.01 s | 0.03 s | 0.02 s |
+| Acceleration search, zmax 200, 8 harmonics | 0.79 s | 0.15 s | 1.25 s | 0.28 s |
+| Jerk search, zmax 100, wmax 300, 4 harmonics | 7.1 s | 1.2 s | 4.5 s | 1.0 s |
+| RFI mask, 512 channels, 33.5 s | 6.2 s | 1.9 s | 0.21 s | 0.19 s |
 
-| | S/N | note |
+The `fb` acceleration and jerk commands include reading the series, whitening and the forward FFT; `accelsearch` starts from a finished `.fft`. The RFI methods differ (`rfifind` statistics against IQRM), so that row does not compare equal work.
+
+Single pulse, DM 0-600, 512 channels, 33.5 s, 8 threads. The DM grids differ (PRESTO 601 trials at step 1, ours 353), and `single_pulse_search.py` is single-threaded:
+
+| | seconds | burst S/N (DM 350, 10 s) |
 |---|---|---|
-| `fb sp` subband / fdmt | 52.0 / 52.7 | |
-| `single_pulse_search.py` | not found | default bad-block rejection discards the burst's block |
-| `single_pulse_search.py -b` | 32.5 | the burst inflates the block's estimated standard deviation |
+| `prepsubband` (nsub 128) + `single_pulse_search.py -b` | 28 + 122 | 32.7 |
+| `prepsubband`, nsub 32, 1 thread (dedispersion only) | 9 | |
+| `fb sp` subband, RFI included | 14.0 | 52.0 |
+| `fb sp` fdmt, RFI included | 24.9 | 52.7 |
 
-No method (brute, subband, fdmt, PRESTO) reported anything above 6 on one 33.5 s noise file, DM 0-300.
+A matched boxcar on PRESTO's own series gives 53.6. Its lower value comes from the burst inflating the block's estimated standard deviation. An older PRESTO (2017) run without `-b` did not report the burst, because bad-block rejection discarded its block. With that version, no method (brute, subband, fdmt, PRESTO) reported anything above 6 on one 33.5 s noise file, DM 0-300.
 
-Periodicity (sigma, after trials; 2^19 white-noise samples plus a pulsar drifting by z bins; `-numharm 8`, `zmax 200`):
+Sensitivity (sigma after trials; 2^19 white-noise samples plus a pulsar drifting by z bins; 8 harmonics, `zmax 200`, matched frequency ranges; PRESTO's `-flo/-fhi` refer to the highest harmonic):
 
 | z | `accelsearch` | `fb fft --zmax` |
 |---|---|---|
-| 0 | 22.1 | 22.4 |
-| 40 | 19.6 | 20.1 |
-| 120 | 9.5 | 9.1 |
-| 180 | 10.4 | 9.4 |
-| 120, with red noise | 8.3 | 9.8 |
+| 0 | 21.8 | 22.4 |
+| 40 | 18.9 | 20.1 |
+| 120 | 9.0 | 9.1 |
+| 180 | 9.7 | 9.4 |
+| 120, with red noise | 8.0 | 9.8 |
 
-These are single realisations. The trials corrections differ: ours counts every search cell, PRESTO counts independent cells. On nine pulsar-free files (five white, four with red noise) at `zmax 200`, PRESTO listed chance candidates of 2 to 3.6 sigma on seven, one at 9.9 from residual red noise near 0.15 Hz on another, and nothing on the ninth; ours listed none above 2. In our plain FFT search (no `--zmax`), five of the nine listed something, the highest at 3.2 sigma on red noise.
+These are single realisations. On five white-noise files PRESTO listed a chance candidate of 2.2 to 3.2 sigma in four; ours listed none above 2 at `zmax 200` (our trials count is stricter).
 
-Not compared: RFI masks, folding, jerk search, heimdall, real telescope data.
+Not compared: RFI mask quality, folding, jerk sensitivity, heimdall, real telescope data.
 
 ## Where things are
 

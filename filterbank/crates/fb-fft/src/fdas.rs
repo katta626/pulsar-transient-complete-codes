@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use fb_defs::{PeriodicCandidate, Series};
@@ -96,10 +97,23 @@ struct Kern {
     norm: [f32; 2],
 }
 
+struct SubPlane {
+    eng: Engine,
+    map: Vec<usize>,
+    kerns: Vec<(usize, Kern)>,
+}
+
 impl Engine {
     fn new(hw: usize) -> Self {
         let kl = 4 * hw + 1;
         let l = (4 * kl).next_power_of_two().max(2048);
+        let mut p = FftPlanner::<f32>::new();
+        Self { l, hw, u: l - kl + 1, fwd: p.plan_fft_forward(l), inv: p.plan_fft_inverse(l) }
+    }
+
+    fn with_output(hw: usize, u: usize) -> Self {
+        let kl = 4 * hw + 1;
+        let l = (u + kl - 1).next_power_of_two();
         let mut p = FftPlanner::<f32>::new();
         Self { l, hw, u: l - kl + 1, fwd: p.plan_fft_forward(l), inv: p.plan_fft_inverse(l) }
     }
@@ -135,12 +149,15 @@ impl Engine {
         let mut buf: Vec<Complex32> = seg.iter().zip(&k.fft).map(|(a, b)| a * b.conj()).collect();
         self.inv.process(&mut buf);
         let scale = 1.0 / (self.l as f32 * self.l as f32);
-        (0..self.u)
-            .map(|j| {
-                let n = s0 + 2 * self.hw as i64 + j as i64;
-                buf[j].norm_sqr() * scale / k.norm[(n.rem_euclid(2)) as usize].max(1e-30)
-            })
-            .collect()
+        let par = (s0.rem_euclid(2)) as usize;
+        let g = [scale / k.norm[par].max(1e-30), scale / k.norm[1 - par].max(1e-30)];
+        let mut out = vec![0f32; self.u];
+        for (o, b) in out.chunks_mut(2).zip(buf.chunks(2)) {
+            for (i, v) in o.iter_mut().enumerate() {
+                *v = b[i].norm_sqr() * g[i];
+            }
+        }
+        out
     }
 }
 
@@ -191,11 +208,29 @@ pub fn search(spec: &[Complex32], series: &Series, fp: &FdasParams, params: &Fft
             ((v / step).round() as i64 + half as i64).clamp(0, len as i64 - 1) as usize
         }
     };
+    let mut subs: HashMap<(u32, u32), SubPlane> = HashMap::new();
+    for &h in &st {
+        for k in (1..h).step_by(2) {
+            let q = k as f64 / h as f64;
+            let map: Vec<usize> = (0..nz * nw)
+                .map(|t| idx(zs[t / nw] * q, fp.dz, nz / 2, nz) * nw + idx(ws[t % nw] * q, fp.dw, nw / 2, nw))
+                .collect();
+            let mut need = map.clone();
+            need.sort_unstable();
+            need.dedup();
+            let hw = need.iter().map(|&s| halfwidth(zs[s / nw], ws[s % nw])).max().unwrap();
+            let e = Engine::with_output(hw, (eng.u * k as usize).div_ceil(h as usize) + 2);
+            let kerns = need.par_iter().map(|&s| (s, e.kernel(zs[s / nw], ws[s % nw]))).collect();
+            subs.insert((k, h), SubPlane { eng: e, map, kerns });
+        }
+    }
     let mid = series.header.start.add_seconds(t / 2.0);
     let obs_id = series.header.observation_id();
-    let mut out: Vec<PeriodicCandidate> = Vec::new();
-    let mut n0 = n_lo;
-    while n0 < n_hi {
+    let starts: Vec<usize> = (n_lo..n_hi).step_by(eng.u).collect();
+    let bytes = 8 * nz * nw * eng.u;
+    let batch = ((1usize << 30) / bytes).clamp(1, rayon::current_num_threads());
+    let block = |n0: usize| -> Vec<PeriodicCandidate> {
+        let mut out: Vec<PeriodicCandidate> = Vec::new();
         let ue = eng.u.min(n_hi - n0);
         let s0 = n0 as i64 - 2 * eng.hw as i64;
         let seg = eng.segment(spec, s0);
@@ -204,38 +239,32 @@ pub fn search(spec: &[Complex32], series: &Series, fp: &FdasParams, params: &Fft
         for (si, &h) in st.iter().enumerate() {
             if h > 1 {
                 for k in (1..h).step_by(2) {
+                    let sub = &subs[&(k, h)];
                     let base = (n0 as u64 * k as u64 / h as u64) as i64;
-                    let sq = base - 2 * eng.hw as i64;
-                    let segq = eng.segment(spec, sq);
-                    let q = k as f64 / h as f64;
-                    let map: Vec<usize> = (0..nz * nw)
-                        .map(|t| idx(zs[t / nw] * q, fp.dz, nz / 2, nz) * nw + idx(ws[t % nw] * q, fp.dw, nw / 2, nw))
-                        .collect();
-                    let mut need: Vec<usize> = map.clone();
-                    need.sort_unstable();
-                    need.dedup();
-                    let planes: Vec<(usize, Vec<f32>)> = need.par_iter().map(|&s| (s, eng.correlate(&segq, &kerns[s], sq))).collect();
+                    let sq = base - 2 * sub.eng.hw as i64;
+                    let segq = sub.eng.segment(spec, sq);
+                    let planes: Vec<(usize, Vec<f32>)> = sub.kerns.par_iter().map(|(s, kn)| (*s, sub.eng.correlate(&segq, kn, sq))).collect();
                     let mut lookup: Vec<Option<&Vec<f32>>> = vec![None; nz * nw];
                     for (s, p) in &planes {
                         lookup[*s] = Some(p);
                     }
+                    let src: Vec<u32> = (0..ue)
+                        .map(|j| (((n0 + j) as u64 * k as u64 * 2 + h as u64) / (2 * h as u64) - base as u64) as u32)
+                        .take_while(|&q| (q as usize) < sub.eng.u)
+                        .collect();
                     sum.par_iter_mut().enumerate().for_each(|(t, row)| {
-                        let sub = lookup[map[t]].unwrap();
-                        for (j, v) in row.iter_mut().enumerate().take(ue) {
-                            let n = (n0 + j) as u64;
-                            let nq = ((n * k as u64 * 2 + h as u64) / (2 * h as u64)) as i64 - base;
-                            if (nq as usize) < sub.len() {
-                                *v += sub[nq as usize];
-                            }
+                        let plane = lookup[sub.map[t]].unwrap();
+                        for (v, &q) in row.iter_mut().zip(&src) {
+                            *v += plane[q as usize];
                         }
                     });
                 }
             }
             let mut best = vec![(0f32, 0usize); ue];
             for (t, row) in sum.iter().enumerate() {
-                for j in 0..ue {
-                    if row[j] > best[j].0 {
-                        best[j] = (row[j], t);
+                for (b, &v) in best.iter_mut().zip(row) {
+                    if v > b.0 {
+                        *b = (v, t);
                     }
                 }
             }
@@ -275,7 +304,11 @@ pub fn search(spec: &[Complex32], series: &Series, fp: &FdasParams, params: &Fft
                 });
             }
         }
-        n0 += eng.u;
+        out
+    };
+    let mut out: Vec<PeriodicCandidate> = Vec::new();
+    for c in starts.chunks(batch) {
+        out.extend(c.par_iter().flat_map_iter(|&n0| block(n0)).collect::<Vec<_>>());
     }
     out.sort_by(|a, b| b.sigma.partial_cmp(&a.sigma).unwrap());
     out.truncate(params.max_cands);
