@@ -8,3 +8,7 @@
 	path = pulsar-analysis-codes
 	url = git@github.com:katta626/pulsar-analysis-codes.git
 	branch = main
+[submodule "dart-transient-detection"]
+	path = dart-transient-detection
+	url = git@github.com:katta626/dart-transient-detection.git
+	branch = main

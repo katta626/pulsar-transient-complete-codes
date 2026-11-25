@@ -15,5 +15,6 @@ The reository acts in two way;
 | Folder | Contents |
 |---|---|
 | `pulsar-analysis-codes/` | Pulsar and transient search codes (submodule) |
+| `dart-transient-detection/` | Live transient detection for DART (submodule) |
 | `PULSAR-TUTORIAL/` | Pulsar data formats tutorial (submodule) |
 | `Intro-to-Interferometry/` | Interferometry tutorial (submodule) |
