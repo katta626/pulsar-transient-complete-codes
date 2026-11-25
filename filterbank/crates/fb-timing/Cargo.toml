@@ -1,9 +1,0 @@
-[package]
-name = "fb-timing"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-fb-defs.workspace = true
-rustfft.workspace = true
-serde.workspace = true

@@ -4,3 +4,7 @@
 [submodule "PULSAR-TUTORIAL"]
 	path = PULSAR-TUTORIAL
 	url = https://github.com/katta626/PULSAR-TUTORIAL
+[submodule "pulsar-analysis-codes"]
+	path = pulsar-analysis-codes
+	url = git@github.com:katta626/pulsar-analysis-codes.git
+	branch = main
