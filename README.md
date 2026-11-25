@@ -1,20 +1,11 @@
-The reository acts in two way;
+Each submodule here is a separate directory of its own. This repository is just a map of all my codes for RADIO ASTRONOMY, written completely by me (otherwise credits are appropriately mentioned). The codes are segregated in the following way:
 
- 1. Everything which is named as tutorial and/or Intro are intended for the people who want to learn radio astronomy, it mostly covers the explanation from ADC data to interferometry and detection of sun, galactic plane, and all type of solar burst in one tutorial code. Pulsar tutorial will consist of understaiding the data types used at different level of data proccessing like - .PACAP, .DADA, .FIL, .FITS and uses diffferent python libraries to understand them along with introduction of psrchive;
-
-
-### Every codes are written from scrath in tutorial codes, so it also helps sometimes if you want to play with the data for understadig; which i keep on doing.
-
- 2. It also has the 'def' (python refrence) and source codes for all the data proccesing pipelines which i have written for the following telescopes :
-
-     1. two-element interferometry which it has been used and currently using for the study of solar and            gaalctic transits along with the dailyobservations of solar flares (detection of solar flares was not done by me.)
-     2. Diamond Array Telescope, currently writing the transient detection pipeline which consist of the whole data proccesing from start of ADC data products to classifications of the same; parralell proccessing for ADC to filterbank by modifying the old codes, and gpu and/or search algorithms for transients along with rfi mitigation. (The codes order may look messy but it will be better as the time goes hopefully by the time we it a real time transient detection system.)
-
-## Repository layout
-
-| Folder | Contents |
-|---|---|
-| `pulsar-analysis-codes/` | Pulsar and transient search codes (submodule) |
-| `dart-transient-detection/` | Live transient detection for DART (submodule) |
-| `PULSAR-TUTORIAL/` | Pulsar data formats tutorial (submodule) |
-| `Intro-to-Interferometry/` | Interferometry tutorial (submodule) |
+1. Directories named intro/tutorial mainly serve people who want to learn or are learning for the first time. They include everything necessary for that purpose, although I frequently use/edit those codes to brush up my basics and/or to check the instrument electronics or the complete signal path, just by changing the data and following the same data structure (to be honest, it is actually the easiest way to pin down a problem, if you know exactly the internal temp of the system).
+2. Directories named analysis/detection/pipelines are basically the codes which I used to process data from certain telescopes and/or the pipelines I developed for them.
+3. Directories whose names have keywords from both 1 and 2 serve both purposes. For example, `Intro-Interferometry-TWIN-analysis` is an introduction to interferometry and also the analysis code of the TWIN telescope at Gauribidanur, used for solar detections.
+4. `DOCS` consists of the math and/or algorithms used in different libraries, which I tried to deconstruct and understand while I was using them.
+5. Finally, the submodule `pulsar-analysis-codes` is just my way of venting about the existence of different libraries for different things, each best in its own way. So here you see my little effort to bridge the compatibility of those libraries with each other, by managing the headers of the input file and converting the libraries' different output file types into whatever file type you want (it can have custom ones too).
+   1. I'm using RUST for the CPU work and C++ for the GPU work (only Linux compatible).
+   2. Python calls RUST/C++ and handles the variables.
+   3. Claude's been a great collaborator here !!!
+6. The UI/website codes for the TWIN and DART telescopes are not included here, since they are just web-interface wrappers around the data pipeline codes above. You can find them in my other GitHub repositories.

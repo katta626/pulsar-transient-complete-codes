@@ -1,6 +1,6 @@
-[submodule "Intro-to-Interferometry"]
-	path = Intro-to-Interferometry
-	url = https://github.com/katta626/Intro-to-Interferometry
+[submodule "Intro-Interferometry-TWIN-analysis"]
+	path = Intro-Interferometry-TWIN-analysis
+	url = https://github.com/katta626/Intro-Interferometry-TWIN-analysis
 [submodule "PULSAR-TUTORIAL"]
 	path = PULSAR-TUTORIAL
 	url = https://github.com/katta626/PULSAR-TUTORIAL
