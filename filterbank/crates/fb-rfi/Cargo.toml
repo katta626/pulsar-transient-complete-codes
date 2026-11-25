@@ -1,8 +1,0 @@
-[package]
-name = "fb-rfi"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-fb-defs.workspace = true
-rayon.workspace = true
